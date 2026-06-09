@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="pageTitle">邮件头分析器 · 完整版</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; background: #f0f2f5; color: #2c3e50; line-height: 1.6; min-height: 100vh; padding: 20px; }
+.container { max-width: 1400px; margin: 0 auto; }
+.app-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 35px 25px; text-align: center; border-radius: 16px; margin-bottom: 25px; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3); position: relative; }
+.app-header h1 { font-size: 2em; margin-bottom: 8px; font-weight: 700; }
+.app-header p { opacity: 0.95; font-size: 1em; }
+.dev-info { margin-top: 14px; font-size: 0.88em; opacity: 0.95; }
+.dev-info strong { font-weight: 600; }
+.dev-info a { color: white; text-decoration: none; border-bottom: 1px dashed rgba(255,255,255,0.6); padding-bottom: 1px; transition: all 0.2s; }
+.dev-info a:hover { border-bottom-color: white; border-bottom-style: solid; }
+
+/* ★ 语言切换 */
+.lang-toggle { position: absolute; top: 16px; right: 20px; display: flex; gap: 2px; background: rgba(255,255,255,0.15); border-radius: 6px; padding: 3px; }
+.lang-btn { padding: 4px 12px !important; background: transparent !important; color: white !important; border: none !important; border-radius: 4px !important; font-size: 0.85em !important; font-weight: 600 !important; cursor: pointer; transition: all 0.2s; opacity: 0.7; font-family: inherit; }
+.lang-btn:hover { opacity: 1; }
+.lang-btn.active { background: rgba(255,255,255,0.95) !important; color: #667eea !important; opacity: 1; }
+
+.card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; }
+.card h2 { font-size: 1.2em; margin-bottom: 12px; color: #2c3e50; display: flex; align-items: center; gap: 8px; }
+.hint { font-size: 0.9em; color: #6b7785; margin-bottom: 12px; }
+textarea#emailInput { width: 100%; min-height: 280px; padding: 12px; border: 2px solid #e1e4e8; border-radius: 8px; font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; font-size: 13px; resize: vertical; transition: border-color 0.2s; background: #fafbfc; }
+textarea#emailInput:focus { outline: none; border-color: #667eea; background: white; }
+.actions { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; align-items: center; }
+button { padding: 10px 18px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+button.primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+button.primary:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+button.success { background: linear-gradient(135deg, #48bb78, #38a169); color: white; }
+button.success:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4); }
+button.secondary { background: #f0f2f5; color: #2c3e50; }
+button.secondary:hover { background: #e1e4e8; }
+button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+#btnReport { margin-left: auto; }
+@media (max-width: 640px) { #btnReport { margin-left: 0; width: 100%; } }
+.help-box { margin-top: 16px; padding: 16px; background: #f8f9fa; border-radius: 8px; font-size: 0.9em; border-left: 3px solid #667eea; }
+.help-box h3 { margin-bottom: 8px; color: #4a5568; font-size: 1em; }
+.help-box h3:not(:first-child) { margin-top: 12px; }
+.help-box ul { margin-left: 20px; color: #4a5568; }
+.help-box li { margin-bottom: 4px; }
+.tab-buttons { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #e9ecef; flex-wrap: wrap; background: white; border-radius: 12px 12px 0 0; padding: 0 24px; }
+.tab-button { padding: 14px 18px; background: transparent; font-size: 0.95em; font-weight: 500; color: #6b7785; border-bottom: 2px solid transparent; margin-bottom: -2px; border-radius: 0; }
+.tab-button:hover { color: #667eea; }
+.tab-button.active { color: #667eea; border-bottom-color: #667eea; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+.summary-item { padding: 18px; border-radius: 10px; background: linear-gradient(135deg, #f5f7fa, #fafbfc); border-left: 4px solid #667eea; }
+.summary-item .label { font-size: 0.8em; color: #6b7785; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+.summary-item .value { font-size: 1.6em; font-weight: 700; color: #2c3e50; }
+.summary-item.warning { border-left-color: #ed8936; background: linear-gradient(135deg, #fffaf0, #fef7ed); }
+.summary-item.danger { border-left-color: #f56565; background: linear-gradient(135deg, #fff5f5, #fef2f2); }
+.summary-item.success { border-left-color: #48bb78; background: linear-gradient(135deg, #f0fff4, #f7fef9); }
+.timeline { position: relative; padding-left: 30px; }
+.timeline::before { content: ''; position: absolute; left: 10px; top: 8px; bottom: 8px; width: 3px; background: linear-gradient(180deg, #667eea, #764ba2); border-radius: 2px; }
+.hop { position: relative; padding: 16px 18px; margin-bottom: 14px; background: #f8f9fa; border-radius: 10px; margin-left: 25px; border: 1px solid #e9ecef; transition: all 0.2s; }
+.hop:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateX(2px); }
+.hop::before { content: ''; position: absolute; left: -30px; top: 22px; width: 16px; height: 16px; background: #48bb78; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 0 2px #48bb78; }
+.hop.slow::before { background: #f56565; box-shadow: 0 0 0 2px #f56565; }
+.hop.normal::before { background: #ed8936; box-shadow: 0 0 0 2px #ed8936; }
+.hop.fast::before { background: #48bb78; box-shadow: 0 0 0 2px #48bb78; }
+.hop-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+.hop-number { font-weight: 700; color: #2c3e50; font-size: 1.05em; }
+.hop-delay { padding: 4px 12px; background: #48bb78; color: white; border-radius: 14px; font-size: 0.85em; font-weight: 600; }
+.hop-delay.slow { background: #f56565; }
+.hop-delay.normal { background: #ed8936; }
+.hop-detail { font-size: 0.9em; color: #4a5568; line-height: 1.8; }
+.hop-detail .field { display: inline-block; min-width: 60px; color: #6b7785; font-weight: 600; }
+.hop-detail .value-text { font-family: 'SF Mono', 'Consolas', monospace; color: #2c3e50; }
+.bar-chart { margin-top: 10px; }
+.bar-row { display: flex; align-items: center; margin-bottom: 14px; gap: 12px; }
+.bar-label { width: 80px; font-size: 0.9em; font-weight: 500; color: #4a5568; flex-shrink: 0; }
+.bar-container { flex: 1; background: #f0f2f5; border-radius: 6px; height: 32px; position: relative; overflow: hidden; min-width: 100px; }
+.bar { height: 100%; display: flex; align-items: center; padding: 0 12px; color: white; font-size: 0.85em; font-weight: 600; transition: width 0.6s ease; min-width: 50px; background: linear-gradient(90deg, #48bb78, #38a169); }
+.bar.slow { background: linear-gradient(90deg, #f56565, #e53e3e); }
+.bar.normal { background: linear-gradient(90deg, #ed8936, #dd6b20); }
+.bar.fast { background: linear-gradient(90deg, #48bb78, #38a169); }
+.headers-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+.headers-table tr { border-bottom: 1px solid #e9ecef; }
+.headers-table tr:hover { background: #f8f9fa; }
+.headers-table td { padding: 10px 12px; vertical-align: top; }
+.headers-table td:first-child { font-weight: 600; color: #4a5568; width: 180px; background: #f8f9fa; font-family: 'SF Mono', 'Consolas', monospace; font-size: 0.9em; }
+.headers-table td:nth-child(2) { font-family: 'SF Mono', 'Consolas', monospace; word-break: break-all; font-size: 0.85em; color: #2c3e50; }
+.headers-section-title { background: #f0f2f5; font-weight: 700; text-align: center; color: #4a5568; padding: 8px !important; }
+.diagnosis { padding: 14px 16px; border-radius: 8px; margin-bottom: 12px; display: flex; gap: 12px; align-items: flex-start; }
+.diagnosis-icon { font-size: 1.3em; flex-shrink: 0; }
+.diagnosis-body { flex: 1; }
+.diagnosis-title { font-weight: 600; margin-bottom: 4px; font-size: 0.95em; }
+.diagnosis-msg { font-size: 0.9em; opacity: 0.95; }
+.diagnosis.info { background: #ebf8ff; border-left: 4px solid #3182ce; color: #2c5282; }
+.diagnosis.warning { background: #fffaf0; border-left: 4px solid #ed8936; color: #7c2d12; }
+.diagnosis.danger { background: #fff5f5; border-left: 4px solid #f56565; color: #742a2a; }
+.diagnosis.success { background: #f0fff4; border-left: 4px solid #48bb78; color: #22543d; }
+.empty-state { text-align: center; padding: 50px 20px; color: #6b7785; }
+.empty-state .icon { font-size: 3em; margin-bottom: 12px; opacity: 0.4; }
+.section-title { font-size: 1.05em; font-weight: 600; color: #2c3e50; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #f0f2f5; }
+.auth-badges { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.auth-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 14px; font-size: 0.85em; font-weight: 600; }
+.auth-badge.pass { background: #c6f6d5; color: #22543d; }
+.auth-badge.fail { background: #fed7d7; color: #742a2a; }
+.auth-badge.softfail { background: #feebc8; color: #7c2d12; }
+.auth-badge.none { background: #e2e8f0; color: #2d3748; }
+.auth-detail-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; }
+.auth-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e9ecef; font-size: 0.95em; }
+.auth-detail-body > div { font-size: 0.9em; padding: 3px 0; color: #4a5568; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.auth-detail-body .label { display: inline-block; min-width: 110px; color: #6b7785; font-weight: 500; }
+.auth-detail-body code { background: #e2e8f0; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; font-family: 'SF Mono', 'Consolas', monospace; word-break: break-all; }
+.copy-btn { display: inline-flex; align-items: center; justify-content: center; background: white; border: 1px solid #cbd5e0; border-radius: 4px; padding: 1px 6px; margin-left: 4px; cursor: pointer; font-size: 0.85em; line-height: 1.4; color: #4a5568; transition: all 0.15s; font-family: inherit; }
+.copy-btn:hover { background: #edf2f7; border-color: #667eea; color: #667eea; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(102,126,234,0.2); }
+.copy-btn:active { transform: translateY(0); }
+.copy-btn.copied { background: #c6f6d5; border-color: #48bb78; color: #22543d; box-shadow: 0 0 0 2px rgba(72,187,120,0.2); }
+.dkim-sig-detail { background: white; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 0.9em; }
+.dkim-sig-detail > div { padding: 2px 0; }
+.dkim-sig-detail .sig-title { font-weight: 600; color: #4a5568; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px dashed #e9ecef; }
+.tag { font-size: 0.78em; padding: 2px 7px; border-radius: 4px; font-weight: 500; margin-left: 4px; display: inline-block; }
+.tag-warn { background: #feebc8; color: #7c2d12; }
+.tag-err { background: #fed7d7; color: #742a2a; }
+.tag-ok { background: #c6f6d5; color: #22543d; }
+.tag-info { background: #bee3f8; color: #2a4365; }
+.tag-mute { background: #e2e8f0; color: #2d3748; }
+.dmarc-explain { margin-top: 8px; font-size: 0.85em; color: #6b7785; padding-top: 8px; border-top: 1px dashed #e9ecef; }
+.arc-seal-row { background: white; border: 1px solid #e9ecef; border-radius: 6px; padding: 6px 12px; margin-top: 6px; font-size: 0.88em; }
+.error-msg { background: #fff5f5; border: 1px solid #feb2b2; color: #742a2a; padding: 12px 16px; border-radius: 8px; margin-top: 12px; }
+.app-footer { text-align: center; padding: 20px; color: #6b7785; font-size: 0.9em; }
+.app-footer a { color: #667eea; text-decoration: none; border-bottom: 1px dashed #667eea; }
+.app-footer a:hover { border-bottom-style: solid; }
+@media (max-width: 768px) { .app-header h1 { font-size: 1.5em; } .card { padding: 18px; } .summary-grid { grid-template-columns: 1fr 1fr; } .tab-button { padding: 12px 12px; font-size: 0.85em; } .bar-label { width: 60px; font-size: 0.8em; } .headers-table td:first-child { width: 120px; } .auth-detail-body .label { min-width: 90px; } .lang-toggle { top: 10px; right: 10px; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <header class="app-header">
+    <div class="lang-toggle">
+      <button class="lang-btn active" id="langBtnZh" onclick="setLanguage('zh')" title="简体中文">中</button>
+      <button class="lang-btn" id="langBtnEn" onclick="setLanguage('en')" title="English">EN</button>
+    </div>
+    <h1>📧 <span data-i18n="pageTitle">邮件头分析器 · 完整版</span></h1>
+    <p data-i18n="headerSubtitle">传输路径分析 · 延迟统计 · SPF / DKIM / DMARC / ARC 验证 · 一键生成可折叠报告</p>
+    <div class="dev-info">
+      <span data-i18n="devBy">由</span> <strong>Renjun</strong> <span data-i18n="devDeveloped">开发</span> · <a href="mailto:renjun.yang@qq.com">renjun.yang@qq.com</a>
+    </div>
+  </header>
+
+  <div class="card">
+    <h2 data-i18n="inputTitle">📋 邮件源文本</h2>
+    <p class="hint" data-i18n="inputHint">从邮件客户端查看原始邮件源代码，复制完整内容粘贴到下方进行分析（自动处理中文乱码）</p>
+    <textarea id="emailInput" data-i18n-placeholder="inputPlaceholder" placeholder="粘贴完整的邮件源（包括所有 headers）..."></textarea>
+    <div class="actions">
+      <button class="primary" onclick="analyze()" data-i18n="btnAnalyze">🔍 开始分析</button>
+      <button class="secondary" onclick="loadSample()" data-i18n="btnSample">📝 加载示例</button>
+      <button class="secondary" onclick="clearAll()" data-i18n="btnClear">🗑️ 清空</button>
+      <button class="secondary" onclick="toggleHelp()" data-i18n="btnHelp">❓ 帮助</button>
+      <button class="success" id="btnReport" onclick="generateReport()" disabled data-i18n="btnReport">📄 生成报告</button>
+    </div>
+    <div id="helpBox" class="help-box" style="display:none">
+      <h3 data-i18n="helpTitle1">如何获取邮件源代码：</h3>
+      <ul>
+        <li><strong>Gmail：</strong><span data-i18n="helpGmail">打开邮件 → 点击右上角 ⋮ → 选择「显示原始邮件」</span></li>
+        <li><strong>Outlook (网页)：</strong><span data-i18n="helpOutlookWeb">点击 ⋯ → 「查看」→「查看邮件源」</span></li>
+        <li><strong>Outlook (客户端)：</strong><span data-i18n="helpOutlookClient">双击打开 → 文件 → 属性 → 邮件头信息</span></li>
+        <li><strong>Apple Mail：</strong><span data-i18n="helpAppleMail">选中邮件 → ⌘+Option+U 显示原始邮件</span></li>
+        <li><strong>Thunderbird：</strong><span data-i18n="helpThunderbird">选中邮件 → Ctrl+U 查看源代码</span></li>
+        <li><strong>Foxmail / QQ邮箱：</strong><span data-i18n="helpFoxmail">右键邮件 → 「查看原始信息」</span></li>
+      </ul>
+      <h3 data-i18n="helpTitle2">关于中文乱码：</h3>
+      <ul>
+        <li data-i18n="helpCharset1">主题和发件人中的 =?UTF-8?B?...?=、=?GBK?Q?...?= 会被自动解码</li>
+        <li data-i18n="helpCharset2">支持 Base64 (B) 和 Quoted-printable (Q) 两种编码方式</li>
+        <li data-i18n="helpCharset3">支持 UTF-8、GBK、GB18030、Big5、ISO-8859-1 等常见字符集</li>
+      </ul>
+      <h3 data-i18n="helpTitle3">关于报告：</h3>
+      <ul>
+        <li data-i18n="helpReport1">点击「📄 生成报告」下载独立的 HTML 报告文件</li>
+        <li data-i18n="helpReport2">报告中的各模块（除概览外）默认折叠，可点击展开查看详情</li>
+        <li data-i18n="helpReport3">报告可保存为 PDF（浏览器 → 打印 → 另存为 PDF）</li>
+      </ul>
+      <h3 data-i18n="helpTitle4">关于复制：</h3>
+      <ul>
+        <li data-i18n="helpCopy1">「安全认证」板块中每个邮箱/域名/IP 旁边都有 📋 复制按钮</li>
+        <li data-i18n="helpCopy2">点击即可复制到剪贴板（自动去除引号），按钮会变成 ✅ 反馈 1.2 秒</li>
+      </ul>
+    </div>
+    <div id="errorMsg"></div>
+  </div>
+
+  <div id="results" class="card" style="display:none">
+    <div class="tab-buttons">
+      <button class="tab-button active" data-tab="summary" onclick="showTab('summary')" data-i18n="tabSummary">📊 概览</button>
+      <button class="tab-button" data-tab="timeline" onclick="showTab('timeline')" data-i18n="tabTimeline">⏱️ 传输时间轴</button>
+      <button class="tab-button" data-tab="chart" onclick="showTab('chart')" data-i18n="tabChart">📈 延迟图表</button>
+      <button class="tab-button" data-tab="auth" onclick="showTab('auth')" data-i18n="tabAuth">🔐 安全认证</button>
+      <button class="tab-button" data-tab="headers" onclick="showTab('headers')" data-i18n="tabHeaders">📋 详细头部</button>
+      <button class="tab-button" data-tab="diagnosis" onclick="showTab('diagnosis')" data-i18n="tabDiagnosis">🔍 诊断建议</button>
+    </div>
+    <div id="summaryContent" class="tab-content active"></div>
+    <div id="timelineContent" class="tab-content"></div>
+    <div id="chartContent" class="tab-content"></div>
+    <div id="authContent" class="tab-content"></div>
+    <div id="headersContent" class="tab-content"></div>
+    <div id="diagnosisContent" class="tab-content"></div>
+  </div>
+
+  <footer class="app-footer">
+    <p><span data-i18n="devByFooter">由</span> <strong>Renjun</strong> <span data-i18n="devDevelopedFooter">开发</span> · <span data-i18n="devContact">联系方式：</span><a href="mailto:renjun.yang@qq.com">renjun.yang@qq.com</a></p>
+    <p style="margin-top: 4px; font-size: 0.85em; opacity: 0.7;" data-i18n="footerInfo">🔒 本工具完全在浏览器本地运行，不会上传任何邮件数据</p>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   ★ 1. i18n 国际化
+   ============================================================ */
+const I18N = {
+  zh: {
+    pageTitle: '邮件头分析器 · 完整版', headerSubtitle: '传输路径分析 · 延迟统计 · SPF / DKIM / DMARC / ARC 验证 · 一键生成可折叠报告',
+    devBy: '由', devDeveloped: '开发', devByFooter: '由', devDevelopedFooter: '开发', devContact: '联系方式：',
+    inputTitle: '📋 邮件源文本', inputHint: '从邮件客户端查看原始邮件源代码，复制完整内容粘贴到下方进行分析（自动处理中文乱码）',
+    inputPlaceholder: '粘贴完整的邮件源（包括所有 headers）...',
+    btnAnalyze: '🔍 开始分析', btnReport: '📄 生成报告', btnSample: '📝 加载示例', btnClear: '🗑️ 清空', btnHelp: '❓ 帮助',
+    helpTitle1: '如何获取邮件源代码：',
+    helpGmail: '打开邮件 → 点击右上角 ⋮ → 选择「显示原始邮件」',
+    helpOutlookWeb: '点击 ⋯ → 「查看」→「查看邮件源」',
+    helpOutlookClient: '双击打开 → 文件 → 属性 → 邮件头信息',
+    helpAppleMail: '选中邮件 → ⌘+Option+U 显示原始邮件',
+    helpThunderbird: '选中邮件 → Ctrl+U 查看源代码',
+    helpFoxmail: '右键邮件 → 「查看原始信息」',
+    helpTitle2: '关于中文乱码：',
+    helpCharset1: '主题和发件人中的 =?UTF-8?B?...?=、=?GBK?Q?...?= 会被自动解码',
+    helpCharset2: '支持 Base64 (B) 和 Quoted-printable (Q) 两种编码方式',
+    helpCharset3: '支持 UTF-8、GBK、GB18030、Big5、ISO-8859-1 等常见字符集',
+    helpTitle3: '关于报告：',
+    helpReport1: '点击「📄 生成报告」下载独立的 HTML 报告文件',
+    helpReport2: '报告中的各模块（除概览外）默认折叠，可点击展开查看详情',
+    helpReport3: '报告可保存为 PDF（浏览器 → 打印 → 另存为 PDF）',
+    helpTitle4: '关于复制：',
+    helpCopy1: '「安全认证」板块中每个邮箱/域名/IP 旁边都有 📋 复制按钮',
+    helpCopy2: '点击即可复制到剪贴板（自动去除引号），按钮会变成 ✅ 反馈 1.2 秒',
+    tabSummary: '📊 概览', tabTimeline: '⏱️ 传输时间轴', tabChart: '📈 延迟图表',
+    tabAuth: '🔐 安全认证', tabHeaders: '📋 详细头部', tabDiagnosis: '🔍 诊断建议',
+    sumTotalTime: '⏱️ 总传输时间', sumHops: '🔗 传输跳数', sumMaxDelay: '🐢 最慢一跳', sumSlowHops: '⚠️ 慢速跳数',
+    sumEmailInfo: '📧 邮件基本信息（已自动解码）', sumFrom: '发件人', sumTo: '收件人', sumSubject: '主题',
+    sumAuthOverview: '🔐 安全认证总览',
+    tlHop: '第 %d 跳', tlStart: '🟢 起点', tlTime: '时间：', tlFrom: '来自：', tlTo: '到达：', tlProto: '协议：', tlFor: '收件：', tlTotal: '累计：',
+    tlEmpty: '未找到 Received 头',
+    chartTitle: '📈 每一跳延迟分布', chartLegend: '图例：',
+    chartFast: '■ 快速 (<5秒)', chartNormal: '■ 正常 (5秒-1分钟)', chartSlow: '■ 慢速 (>1分钟)',
+    chartEmpty: '没有可显示的延迟数据', chartHop: '第 %d 跳',
+    authTitle: '🔐 邮件认证详细信息', authSPF: '📨 SPF (Sender Policy Framework)', authDKIM: '🔏 DKIM (DomainKeys Identified Mail)',
+    authDMARC: '🛡️ DMARC', authARC: '🔗 ARC (Authenticated Received Chain)',
+    spfDesc: '验证发件 IP 是否被发件域授权', dkimDesc: '用密码学签名验证邮件内容未被篡改',
+    dmarcDesc: '综合 SPF/DKIM，要求身份域与 From 域对齐', arcDesc: '中间服务器转发邮件时保留原始认证结果',
+    descLabel: '说明：',
+    spfMailFrom: 'MAIL FROM：', spfHelo: 'HELO/EHLO：', spfDomain: 'SPF 域：', spfClientIp: '客户端 IP：',
+    fromDomain: 'From 域：', dmarcAlign: 'DMARC 对齐：',
+    dkimDomain: '签名域 (d)：', dkimSelector: '选择器 (s)：', dkimIdentity: '身份 (i)：',
+    dmarcAction: '策略动作：', dmarcCombined: '综合对齐：',
+    dmarcExplain: 'DMARC 通过条件：SPF 对齐通过 或 DKIM 对齐通过（任一即可）',
+    arcSealCount: 'ARC-Seal 实例数：', arcMsgSigCount: 'ARC-Message-Signature 数：', arcInstance: 'ARC 实例 (i)：',
+    arcEmpty: '未找到 DKIM-Signature 头', rawAR: '📜 原始 Authentication-Results',
+    notReported: '未报告', notVerified: '未验证', notSigned: '未签名', notUsed: '未使用',
+    alignStrict: '✅ 严格对齐', alignRelaxed: '✅ 松弛对齐', alignFail: '❌ 未对齐', alignPartial: '⚠️ 部分对齐', alignUnknown: '未知',
+    pass: 'PASS', fail: 'FAIL', softfail: 'SOFTFAIL', none: 'NONE',
+    weakAlgo: '⚠️ 弱算法', expired: '⚠️ 签名过期',
+    sigTitle: '签名 #', sigVersion: '版本：', sigAlgo: '算法：', sigCanon: '规范化：', sigQuery: '查询方法：',
+    sigTime: '签名时间：', sigExp: '过期时间：', sigBh: 'Body Hash：',
+    sealInstance: 'ARC-Seal 实例 #', sealInstanceI: '实例 (i)：', sealDomain: '域 (d)：', sealSelector: '选择器 (s)：', sealTime: '时间：',
+    headersEmpty: '未解析到任何头部', otherHeaders: '其他头部字段',
+    footerInfo: '🔒 本工具完全在浏览器本地运行，不会上传任何邮件数据',
+    noEmail: '请先点击「开始分析」解析邮件', parseError: '解析错误：', reportError: '生成报告失败：',
+    copy: '复制', copied: '已复制',
+    /* 诊断 */
+    diagNoReceived: '未找到 Received 头', diagNoReceivedMsg: '邮件中没有任何 Received 字段。',
+    diagSevereDelay: '邮件传输严重延迟', diagSlow: '邮件传输较慢', diagFast: '传输速度优秀', diagNormalSpeed: '传输速度正常',
+    diagSlowHops: '发现 %d 个慢速跳数', diagLongPath: '传输路径较长', diagLongPathMsg: '邮件经过 %d 个中转服务器。',
+    diagSPFPass: 'SPF 验证通过且 DMARC 对齐', diagSPFFail: 'SPF 验证失败',
+    diagDKIMPass: 'DKIM 验证通过且 DMARC 对齐', diagDKIMFail: 'DKIM 签名验证失败',
+    diagWeakAlgo: 'DKIM 使用弱算法', diagDMARCPass: 'DMARC 验证通过', diagDMARCFail: 'DMARC 验证失败',
+    diagSPFFailMsg: '发件 IP 未被发件域授权。', diagDKIMFailMsg: '邮件内容可能被篡改。',
+    diagWeakAlgoMsg: '建议升级到 SHA-256。', diagDMARCPassMsg: '发件人身份可信。', diagDMARCFailMsg: '未通过 DMARC 对齐策略。',
+    diagFastMsg: '邮件在 %s 内到达。', diagNormalMsg: '总传输时间 %s。', diagSlowMsg: '总传输时间 %s。',
+    diagSevereMsg: '总传输时间 %s，存在 %d 个超过 5 分钟的跳数。',
+    alignStrictMsg: '与 From 域严格对齐。', alignRelaxedMsg: '与 From 域松弛对齐。',
+    diagEmpty: '暂无诊断信息', slowHopsList: '第 %d 跳 %s',
+    /* 报告 */
+    reportTitle: '📧 邮件头分析报告', reportSubject: '邮件主题：', reportFrom: '发件人：', reportTo: '收件人：', reportGenerated: '报告生成：',
+    reportTip: '💡 提示：保存为 PDF 前，请先点击「📖 全部展开」显示所有内容，然后浏览器打印（Ctrl+P）→ 另存为 PDF',
+    reportExpandAll: '📖 全部展开', reportCollapseAll: '📕 全部折叠', reportExpand: '展开', reportCollapse: '折叠',
+    reportTipInline: '💡 点击模块标题可展开/折叠详情',
+    reportOverview: '一、概览', reportEmailInfo: '邮件基本信息', reportAuthOverview: '安全认证总览',
+    reportTimeline: '二、传输时间轴', reportAuth: '三、安全认证', reportDiagnosis: '四、诊断建议',
+    reportFooter: '本报告由「邮件头分析器」自动生成 · 生成时间',
+    miniTotal: '总耗时', miniHops: '跳数', miniMaxDelay: '最慢跳', miniSlow: '慢速跳',
+    countSuccess: '✅ 成功', countInfo: 'ℹ️ 信息', countWarn: '⚠️ 警告', countErr: '🚨 错误',
+    reportMainPrompt: '主要提示：', reportNoDiag: '暂无诊断信息', reportNoReceived: '未找到 Received 头',
+    reportHopStart: '（起点）', reportDateLabel: 'Date', reportMsgIdLabel: 'Message-ID',
+  },
+  en: {
+    pageTitle: 'Email Header Analyzer · Full Version', headerSubtitle: 'Delivery Path Analysis · Delay Statistics · SPF / DKIM / DMARC / ARC Verification · One-Click Collapsible Report',
+    devBy: 'Developed by', devDeveloped: '', devByFooter: 'Developed by', devDevelopedFooter: '', devContact: 'Contact: ',
+    inputTitle: '📋 Email Source', inputHint: 'View the original email source from your client, copy the complete content and paste it below for analysis (auto-handles encoding)',
+    inputPlaceholder: 'Paste the complete email source (including all headers)...',
+    btnAnalyze: '🔍 Analyze', btnReport: '📄 Generate Report', btnSample: '📝 Load Sample', btnClear: '🗑️ Clear', btnHelp: '❓ Help',
+    helpTitle1: 'How to get email source code:',
+    helpGmail: 'Open email → click ⋮ top right → "Show Original"',
+    helpOutlookWeb: 'Click ⋯ → "View" → "View Message Source"',
+    helpOutlookClient: 'Double-click to open → File → Properties → Internet Headers',
+    helpAppleMail: 'Select email → ⌘+Option+U to show original',
+    helpThunderbird: 'Select email → Ctrl+U to view source',
+    helpFoxmail: 'Right-click email → "View Source"',
+    helpTitle2: 'About encoding:',
+    helpCharset1: 'Subject and sender fields with =?UTF-8?B?...?= or =?GBK?Q?...?= are decoded automatically',
+    helpCharset2: 'Supports Base64 (B) and Quoted-printable (Q) encodings',
+    helpCharset3: 'Supports UTF-8, GBK, GB18030, Big5, ISO-8859-1 and other common charsets',
+    helpTitle3: 'About the report:',
+    helpReport1: 'Click "📄 Generate Report" to download a standalone HTML report',
+    helpReport2: 'Report sections (except overview) are collapsed by default, click to expand',
+    helpReport3: 'Report can be saved as PDF (Browser → Print → Save as PDF)',
+    helpTitle4: 'About copying:',
+    helpCopy1: 'Each email/domain/IP in "Security" has a 📋 copy button',
+    helpCopy2: 'Click to copy (quotes auto-stripped), button turns ✅ for 1.2s',
+    tabSummary: '📊 Overview', tabTimeline: '⏱️ Delivery Timeline', tabChart: '📈 Delay Chart',
+    tabAuth: '🔐 Security', tabHeaders: '📋 Headers', tabDiagnosis: '🔍 Diagnosis',
+    sumTotalTime: '⏱️ Total Delivery Time', sumHops: '🔗 Hop Count', sumMaxDelay: '🐢 Slowest Hop', sumSlowHops: '⚠️ Slow Hops',
+    sumEmailInfo: '📧 Email Information (auto-decoded)', sumFrom: 'From', sumTo: 'To', sumSubject: 'Subject',
+    sumAuthOverview: '🔐 Authentication Overview',
+    tlHop: 'Hop %d', tlStart: '🟢 Start', tlTime: 'Time: ', tlFrom: 'From: ', tlTo: 'To: ', tlProto: 'Protocol: ', tlFor: 'For: ', tlTotal: 'Total: ',
+    tlEmpty: 'No Received headers found',
+    chartTitle: '📈 Per-hop Delay Distribution', chartLegend: 'Legend: ',
+    chartFast: '■ Fast (<5s)', chartNormal: '■ Normal (5s-1min)', chartSlow: '■ Slow (>1min)',
+    chartEmpty: 'No delay data to display', chartHop: 'Hop %d',
+    authTitle: '🔐 Detailed Authentication Information', authSPF: '📨 SPF (Sender Policy Framework)', authDKIM: '🔏 DKIM (DomainKeys Identified Mail)',
+    authDMARC: '🛡️ DMARC', authARC: '🔗 ARC (Authenticated Received Chain)',
+    spfDesc: 'Verifies that the sender IP is authorized by the sending domain',
+    dkimDesc: 'Uses cryptographic signatures to verify email content has not been tampered with',
+    dmarcDesc: 'Combines SPF/DKIM, requires identity domain to align with From domain',
+    arcDesc: 'Intermediate servers preserve original authentication results when forwarding',
+    descLabel: 'Description: ',
+    spfMailFrom: 'MAIL FROM: ', spfHelo: 'HELO/EHLO: ', spfDomain: 'SPF Domain: ', spfClientIp: 'Client IP: ',
+    fromDomain: 'From Domain: ', dmarcAlign: 'DMARC Alignment: ',
+    dkimDomain: 'Signing Domain (d): ', dkimSelector: 'Selector (s): ', dkimIdentity: 'Identity (i): ',
+    dmarcAction: 'Policy Action: ', dmarcCombined: 'Combined Alignment: ',
+    dmarcExplain: 'DMARC passes if: SPF alignment passes OR DKIM alignment passes (either one)',
+    arcSealCount: 'ARC-Seal Instances: ', arcMsgSigCount: 'ARC-Message-Signature Count: ', arcInstance: 'ARC Instance (i): ',
+    arcEmpty: 'No DKIM-Signature header found', rawAR: '📜 Raw Authentication-Results',
+    notReported: 'Not Reported', notVerified: 'Not Verified', notSigned: 'Not Signed', notUsed: 'Not Used',
+    alignStrict: '✅ Strict Alignment', alignRelaxed: '✅ Relaxed Alignment', alignFail: '❌ Not Aligned', alignPartial: '⚠️ Partially Aligned', alignUnknown: 'Unknown',
+    pass: 'PASS', fail: 'FAIL', softfail: 'SOFTFAIL', none: 'NONE',
+    weakAlgo: '⚠️ Weak Algorithm', expired: '⚠️ Expired',
+    sigTitle: 'Signature #', sigVersion: 'Version: ', sigAlgo: 'Algorithm: ', sigCanon: 'Canonicalization: ', sigQuery: 'Query Method: ',
+    sigTime: 'Signature Time: ', sigExp: 'Expiration Time: ', sigBh: 'Body Hash: ',
+    sealInstance: 'ARC-Seal Instance #', sealInstanceI: 'Instance (i): ', sealDomain: 'Domain (d): ', sealSelector: 'Selector (s): ', sealTime: 'Time: ',
+    headersEmpty: 'No headers parsed', otherHeaders: 'Other Headers',
+    footerInfo: '🔒 This tool runs entirely in your browser, no email data is uploaded',
+    noEmail: 'Please click "Analyze" to parse the email first', parseError: 'Parse error: ', reportError: 'Failed to generate report: ',
+    copy: 'Copy', copied: 'Copied',
+    diagNoReceived: 'No Received headers', diagNoReceivedMsg: 'The email has no Received fields.',
+    diagSevereDelay: 'Severe delivery delay', diagSlow: 'Slow delivery', diagFast: 'Excellent delivery speed', diagNormalSpeed: 'Normal delivery speed',
+    diagSlowHops: 'Found %d slow hops', diagLongPath: 'Long delivery path', diagLongPathMsg: 'Email passed through %d relay servers.',
+    diagSPFPass: 'SPF passed with DMARC alignment', diagSPFFail: 'SPF verification failed',
+    diagDKIMPass: 'DKIM passed with DMARC alignment', diagDKIMFail: 'DKIM signature failed',
+    diagWeakAlgo: 'DKIM uses weak algorithm', diagDMARCPass: 'DMARC passed', diagDMARCFail: 'DMARC failed',
+    diagSPFFailMsg: 'Sender IP is not authorized by the sending domain.',
+    diagDKIMFailMsg: 'Email content may have been tampered with.',
+    diagWeakAlgoMsg: 'Recommend upgrading to SHA-256.',
+    diagDMARCPassMsg: 'Sender identity is trusted.', diagDMARCFailMsg: 'Failed DMARC alignment policy.',
+    diagFastMsg: 'Email arrived within %s.', diagNormalMsg: 'Total delivery time: %s.', diagSlowMsg: 'Total delivery time: %s.',
+    diagSevereMsg: 'Total delivery time: %s, with %d hops over 5 minutes.',
+    alignStrictMsg: 'Strictly aligned with From domain.', alignRelaxedMsg: 'Relaxed alignment with From domain.',
+    diagEmpty: 'No diagnosis information', slowHopsList: 'Hop %d %s',
+    reportTitle: '📧 Email Header Analysis Report', reportSubject: 'Subject: ', reportFrom: 'From: ', reportTo: 'To: ', reportGenerated: 'Generated: ',
+    reportTip: '💡 Tip: To save as PDF, first click "📖 Expand All" to show all content, then use browser print (Ctrl+P) → Save as PDF',
+    reportExpandAll: '📖 Expand All', reportCollapseAll: '📕 Collapse All', reportExpand: 'Expand', reportCollapse: 'Collapse',
+    reportTipInline: '💡 Click section title to expand/collapse details',
+    reportOverview: '1. Overview', reportEmailInfo: 'Email Information', reportAuthOverview: 'Authentication Overview',
+    reportTimeline: '2. Delivery Timeline', reportAuth: '3. Security Authentication', reportDiagnosis: '4. Diagnosis',
+    reportFooter: 'This report is auto-generated by Email Header Analyzer · Generated at ',
+    miniTotal: 'Total Time', miniHops: 'Hops', miniMaxDelay: 'Slowest', miniSlow: 'Slow',
+    countSuccess: '✅ Success', countInfo: 'ℹ️ Info', countWarn: '⚠️ Warning', countErr: '🚨 Error',
+    reportMainPrompt: 'Main Note: ', reportNoDiag: 'No diagnosis information', reportNoReceived: 'No Received headers found',
+    reportHopStart: '(Start)', reportDateLabel: 'Date', reportMsgIdLabel: 'Message-ID',
+  }
+};
+
+let currentLang = localStorage.getItem('emailAnalyzerLang') || 'zh';
+function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || I18N.zh[key] || key; }
+function tf(key, ...args) { let s = t(key); args.forEach((a, i) => { s = s.replace('%' + (i+1===1?'s':'d'), a); }); return s; }
+
+function setLanguage(lang) {
+  if (!I18N[lang]) return;
+  currentLang = lang;
+  localStorage.setItem('emailAnalyzerLang', lang);
+  document.documentElement.lang = (lang === 'zh') ? 'zh-CN' : 'en';
+  document.getElementById('langBtnZh').classList.toggle('active', lang === 'zh');
+  document.getElementById('langBtnEn').classList.toggle('active', lang === 'en');
+  applyStaticI18n();
+  if (currentData) renderResults(currentData);
+  if (document.getElementById('results').style.display !== 'none') showTab(getActiveTab());
+}
+function getActiveTab() {
+  const btn = document.querySelector('.tab-button.active');
+  return btn ? btn.getAttribute('data-tab') : 'summary';
+}
+function applyStaticI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    if (I18N[currentLang][k] !== undefined) el.textContent = I18N[currentLang][k];
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const k = el.getAttribute('data-i18n-placeholder');
+    if (I18N[currentLang][k] !== undefined) el.placeholder = I18N[currentLang][k];
+  });
+  document.title = t('pageTitle');
+}
+
+/* ============================================================
+   2. 工具函数
+   ============================================================ */
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+function formatDuration(seconds) {
+  if (seconds === 0 || seconds == null) return '0秒';
+  if (seconds < 1) return '< 1秒';
+  if (seconds < 60) return Math.round(seconds) + '秒';
+  if (seconds < 3600) { const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60); return s > 0 ? `${m}分${s}秒` : `${m}分钟`; }
+  const h = Math.floor(seconds / 3600); const m = Math.floor((seconds % 3600) / 60); return m > 0 ? `${h}小时${m}分` : `${h}小时`;
+}
+function parseTimestamp(str) { if (!str) return null; const cleaned = String(str).replace(/\s*\(([^)]+)\)\s*$/, '').trim(); const date = new Date(cleaned); return isNaN(date.getTime()) ? null : date; }
+function delayClass(sec) { if (sec === 0) return 'fast'; if (sec < 5) return 'fast'; if (sec < 60) return 'normal'; return 'slow'; }
+function delayText(sec) { return sec === 0 ? t('tlStart') : '+' + formatDuration(sec); }
+function authResultClass(val) { if (val === 'pass') return 'pass'; if (val === 'fail' || val === 'hardfail') return 'fail'; if (val === 'softfail' || val === 'temperror' || val === 'permerror') return 'softfail'; return 'none'; }
+function authResultText(val) { const c = authResultClass(val); return t(c); }
+function alignTag(align) {
+  if (align === 'strict') return `<span class="tag tag-ok">${t('alignStrict')}</span>`;
+  if (align === 'relaxed') return `<span class="tag tag-ok">${t('alignRelaxed')}</span>`;
+  if (align === false) return `<span class="tag tag-err">${t('alignFail')}</span>`;
+  if (align === 'partial') return `<span class="tag tag-warn">${t('alignPartial')}</span>`;
+  return `<span class="tag tag-mute">${t('alignUnknown')}</span>`;
+}
+function extractDomain(emailOrDomain) {
+  if (!emailOrDomain) return null;
+  let s = String(emailOrDomain).trim().replace(/[<>]/g, '');
+  if (s.toLowerCase().startsWith('mailto:')) s = s.substring(7);
+  if (s.includes('@')) s = s.split('@').pop();
+  s = s.replace(/\).*$/, '').replace(/[;,].*$/, '').trim();
+  return s.toLowerCase().replace(/\.+$/, '') || null;
+}
+function checkDomainAlignment(fromDomain, authDomain) {
+  if (!fromDomain || !authDomain) return null;
+  if (fromDomain === authDomain) return 'strict';
+  if (fromDomain.endsWith('.' + authDomain) || authDomain.endsWith('.' + fromDomain)) return 'relaxed';
+  return false;
+}
+function localTimeStr(d) { return d.toLocaleString(currentLang === 'zh' ? 'zh-CN' : 'en-US'); }
+
+/* ============================================================
+   ★ 3. 复制到剪贴板（自动去除首尾引号）
+   ============================================================ */
+function copyValue(btn) {
+  let value = btn.getAttribute('data-value') || '';
+  // ★ 自动去除首尾的双引号或单引号
+  value = value.replace(/^["']+|["']+$/g, '');
+  if (!value) return;
+  const showFeedback = () => {
+    const orig = btn.innerHTML;
+    const origTitle = btn.getAttribute('title') || '';
+    btn.innerHTML = '✅';
+    btn.classList.add('copied');
+    btn.setAttribute('title', t('copied') + ': ' + value);
+    setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); btn.setAttribute('title', origTitle); }, 1200);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(value).then(showFeedback).catch(() => { legacyCopy(value); showFeedback(); });
+  } else { legacyCopy(value); showFeedback(); }
+}
+function legacyCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.top = '-9999px'; ta.style.left = '-9999px'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+}
+
+/* ============================================================
+   4. RFC 2047 解码
+   ============================================================ */
+const SUPPORTED_CHARSETS = ['utf-8','gbk','gb18030','gb2312','big5','iso-8859-1','iso-8859-15','windows-1252'];
+function decodeBytes(bytes, charset) { try { charset = (charset || 'utf-8').toLowerCase(); if (!SUPPORTED_CHARSETS.includes(charset)) charset = 'utf-8'; if (charset === 'gb2312') charset = 'gbk'; return new TextDecoder(charset, { fatal: false }).decode(bytes); } catch (e) { return null; } }
+function decodeBase64ToBytes(str) { try { const binary = atob(str.replace(/\s+/g, '')); const bytes = new Uint8Array(binary.length); for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i); return bytes; } catch (e) { return null; } }
+function decodeQPStrToBytes(str) { const replaced = str.replace(/_/g, ' '); const bytes = []; for (let i = 0; i < replaced.length; i++) { if (replaced[i] === '=' && i + 2 < replaced.length) { const hex = replaced.substring(i + 1, i + 3); if (/^[0-9A-Fa-f]{2}$/.test(hex)) { bytes.push(parseInt(hex, 16)); i += 2; continue; } } bytes.push(replaced.charCodeAt(i) & 0xff); } return new Uint8Array(bytes); }
+function decodeRFC2047(str) { if (!str || typeof str !== 'string' || str.indexOf('=?') === -1) return str; const regex = /=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g; let result = '', lastIndex = 0, match, hasMatch = false; while ((match = regex.exec(str)) !== null) { hasMatch = true; if (match.index > lastIndex) result += str.substring(lastIndex, match.index); const charset = match[1], encoding = match[2].toLowerCase(), text = match[3]; let bytes = encoding === 'b' ? decodeBase64ToBytes(text) : decodeQPStrToBytes(text); if (bytes) { const decoded = decodeBytes(bytes, charset); result += decoded !== null ? decoded : match[0]; } else { result += match[0]; } lastIndex = regex.lastIndex; } if (hasMatch && lastIndex < str.length) result += str.substring(lastIndex); return hasMatch ? result : str; }
+
+/* ============================================================
+   5. 邮件解析
+   ============================================================ */
+function parseEmail(rawEmail) { if (!rawEmail || !rawEmail.trim()) throw new Error(currentLang==='zh'?'请输入邮件内容':'Please input email content'); const text = rawEmail.replace(/\r\n/g, '\n').replace(/\r/g, '\n'); const lines = text.split('\n'); let sepIndex = -1; for (let i = 0; i < lines.length; i++) { if (lines[i].trim() === '') { sepIndex = i; break; } } if (sepIndex === -1) sepIndex = lines.length; const headerLines = lines.slice(0, sepIndex); const body = lines.slice(sepIndex + 1).join('\n'); const headers = {}; const normalized = []; let current = null; for (const line of headerLines) { if (/^\s/.test(line) && current) current.value += ' ' + line.trim(); else { if (current) normalized.push(current); const match = line.match(/^([\w-]+)\s*:\s*(.*)$/); current = match ? { name: match[1].toLowerCase(), value: match[2].trim() } : null; } } if (current) normalized.push(current); for (const { name, value } of normalized) { if (headers[name]) headers[name] = Array.isArray(headers[name]) ? [...headers[name], value] : [headers[name], value]; else headers[name] = value; } for (const key in headers) { if (Array.isArray(headers[key])) headers[key] = headers[key].map(v => decodeRFC2047(v)); else headers[key] = decodeRFC2047(headers[key]); } return { headers, body }; }
+function parseReceivedLine(line) { const tsMatch = line.match(/;\s*(.+)$/); if (!tsMatch) return null; const timestamp = parseTimestamp(tsMatch[1]); if (!timestamp) return null; const fromMatch = line.match(/\bfrom\s+([^\s()]+)(?:\s+\(([^)]*)\))?/i); const from = fromMatch ? fromMatch[1] : 'unknown'; const fromDetails = fromMatch && fromMatch[2] ? fromMatch[2] : ''; let ip = ''; if (fromDetails) { const ipMatch = fromDetails.match(/\[(\d+\.\d+\.\d+\.\d+)\]|\[([0-9a-fA-F:]+)\]/); if (ipMatch) ip = ipMatch[1] || ipMatch[2]; if (!ip) { const bareIp = fromDetails.match(/\b(\d+\.\d+\.\d+\.\d+)\b/); if (bareIp) ip = bareIp[1]; } } const byMatch = line.match(/\bby\s+([^\s(]+)(?:\s+\(([^)]*)\))?/i); const by = byMatch ? byMatch[1] : 'unknown'; const byDetails = byMatch && byMatch[2] ? byMatch[2] : ''; const withMatch = line.match(/\bwith\s+([A-Z0-9._+-]+)/i); const withProto = withMatch ? withMatch[1] : ''; const idMatch = line.match(/\bid\s+(\S+)/i); const id = idMatch ? idMatch[1] : ''; const forMatch = line.match(/\bfor\s+<([^>]+)>/i); const forRec = forMatch ? forMatch[1] : ''; return { raw: line, from, fromDetails, ip, by, byDetails, with: withProto, id, for: forRec, timestamp }; }
+function analyzeHops(headers) { const received = headers['received']; if (!received) return []; const list = Array.isArray(received) ? received : [received]; const hops = []; for (let i = 0; i < list.length; i++) { const hop = parseReceivedLine(list[i]); if (hop) hops.push(hop); } if (hops.length === 0) return []; hops.sort((a, b) => a.timestamp - b.timestamp); hops.forEach((hop, idx) => { hop.hopNumber = idx + 1; if (idx === 0) { hop.delay = 0; hop.totalTime = 0; } else { hop.delay = (hop.timestamp - hops[idx - 1].timestamp) / 1000; hop.totalTime = (hop.timestamp - hops[0].timestamp) / 1000; } }); return hops; }
+
+/* ============================================================
+   6. 认证解析
+   ============================================================ */
+function parseDKIMSignature(sig) { const result = {}; if (!sig) return result; const pairs = sig.split(/;\s*/); for (const pair of pairs) { const eq = pair.indexOf('='); if (eq > 0) result[pair.substring(0, eq).trim().toLowerCase()] = pair.substring(eq + 1).trim(); } return result; }
+function isWeakAlgorithm(alg) { if (!alg) return false; return /sha1|rsa-sha1/i.test(alg) && !/sha256|sha512/i.test(alg); }
+function isDKIMExpired(expiry) { if (!expiry) return false; const t = parseInt(expiry); if (isNaN(t)) return false; return t * 1000 < Date.now(); }
+function parseAuth(headers) {
+  const result = { spf: { result: null, smtpMailfrom: null, smtpHelo: null, domain: null, clientIp: null, aligned: null }, dkim: { result: null, domain: null, selector: null, identity: null, aligned: null, signatureExists: false, signatures: [], weakAlgo: false, expired: false }, dmarc: { result: null, policy: null, action: null, headerFrom: null, aligned: null }, arc: { result: null, seals: [], messageSignatures: 0 }, hasAR: false, raw: null };
+  const ar = headers['authentication-results'];
+  if (ar) { result.hasAR = true; const text = Array.isArray(ar) ? ar[0] : ar; result.raw = text; const spfResM = text.match(/\bspf=(\w+)/i); if (spfResM) result.spf.result = spfResM[1].toLowerCase(); const mailfromM = text.match(/\bsmtp\.mailfrom=([^\s;]+)/i); if (mailfromM) { result.spf.smtpMailfrom = mailfromM[1].replace(/[<>]/g, ''); result.spf.domain = extractDomain(mailfromM[1]); } const heloM = text.match(/\bsmtp\.helo=([^\s;]+)/i); if (heloM) result.spf.smtpHelo = heloM[1]; const clientIpM = text.match(/\bclient-ip=([\d.:a-fA-F]+)/i); if (clientIpM) result.spf.clientIp = clientIpM[1]; const dkimM = text.match(/\bdkim=(\w+)/i); if (dkimM) result.dkim.result = dkimM[1].toLowerCase(); const dkimDM = text.match(/\bdkim=[\w\.]+(?:\s+[^;]*\s+|\s+)header\.d=([^\s;]+)/i); if (dkimDM) result.dkim.domain = extractDomain(dkimDM[1]); const dkimIM = text.match(/\bdkim=[\w\.]+(?:\s+[^;]*\s+|\s+)+header\.i=([^\s;]+)/i); if (dkimIM) result.dkim.identity = dkimIM[1].replace(/[<>]/g, ''); const dkimSM = text.match(/\bdkim=[\w\.]+(?:\s+[^;]*\s+|\s+)+header\.s=([^\s;]+)/i); if (dkimSM) result.dkim.selector = dkimSM[1]; const dmarcM = text.match(/\bdmarc=(\w+)/i); if (dmarcM) result.dmarc.result = dmarcM[1].toLowerCase(); const dmarcFromM = text.match(/\bdmarc=[\w\.]+(?:\s+[^;]*\s+|\s+)+header\.from=([^\s;]+)/i); if (dmarcFromM) result.dmarc.headerFrom = extractDomain(dmarcFromM[1]); const dmarcActM = text.match(/\baction=([^\s;]+)/i); if (dmarcActM) result.dmarc.action = dmarcActM[1]; const arcM = text.match(/\barc=(\w+)(?:\s+header\.i=([^\s;]+))?/i); if (arcM) { result.arc.result = arcM[1].toLowerCase(); if (arcM[2]) result.arc.authIdentity = arcM[2].replace(/[<>]/g, ''); } }
+  const dkimSigs = headers['dkim-signature'];
+  if (dkimSigs) { const list = Array.isArray(dkimSigs) ? dkimSigs : [dkimSigs]; list.forEach(sig => { const parsed = parseDKIMSignature(sig); if (parsed && Object.keys(parsed).length > 0) { result.dkim.signatures.push(parsed); result.dkim.signatureExists = true; if (!result.dkim.domain && parsed.d) result.dkim.domain = parsed.d; if (!result.dkim.selector && parsed.s) result.dkim.selector = parsed.s; if (isWeakAlgorithm(parsed.a)) result.dkim.weakAlgo = true; if (isDKIMExpired(parsed.x)) result.dkim.expired = true; } }); }
+  ['arc-seal', 'arc-message-signature', 'arc-authentication-results'].forEach(name => { if (headers[name]) { const list = Array.isArray(headers[name]) ? headers[name] : [headers[name]]; list.forEach((val, idx) => { const inst = parseDKIMSignature(val); if (!result.arc.seals[idx]) result.arc.seals[idx] = {}; result.arc.seals[idx][name.replace('arc-', '')] = inst; if (name === 'arc-message-signature') result.arc.messageSignatures++; }); } });
+  const rspf = headers['received-spf'];
+  if (rspf) { const str = String(rspf); const m = str.match(/^(\w+)/); if (m && !result.spf.result) result.spf.result = m[1].toLowerCase(); const ipM = str.match(/client-ip=([\d.:a-fA-F]+)/); if (ipM) result.spf.clientIp = ipM[1]; const efM = str.match(/envelope-from=([^\s;]+)/); if (efM) { result.spf.smtpMailfrom = efM[1].replace(/[<>]/g, ''); if (!result.spf.domain) result.spf.domain = extractDomain(efM[1]); } }
+  const fromHeader = headers['from'];
+  if (fromHeader) { const fromDomain = extractDomain(String(fromHeader)); if (fromDomain) { if (result.spf.domain) result.spf.aligned = checkDomainAlignment(fromDomain, result.spf.domain); if (result.dkim.domain) result.dkim.aligned = checkDomainAlignment(fromDomain, result.dkim.domain); if (result.spf.aligned || result.dkim.aligned) result.dmarc.aligned = result.spf.aligned || result.dkim.aligned; else result.dmarc.aligned = false; } }
+  return result;
+}
+
+/* ============================================================
+   7. 生成诊断（支持 i18n）
+   ============================================================ */
+function generateDiagnoses(data) {
+  const hops = data.hops, auth = data.auth;
+  const totalDelay = hops.length > 0 ? hops[hops.length - 1].totalTime : 0;
+  const slowHops = hops.filter(h => h.delay > 60), verySlowHops = hops.filter(h => h.delay > 300);
+  const diagnoses = [];
+  if (hops.length === 0) diagnoses.push({ type: 'warning', icon: '⚠️', title: t('diagNoReceived'), message: t('diagNoReceivedMsg') });
+  else if (verySlowHops.length > 0) diagnoses.push({ type: 'danger', icon: '🔴', title: t('diagSevereDelay'), message: t('diagSevereMsg').replace('%s', formatDuration(totalDelay)).replace('%d', verySlowHops.length) });
+  else if (totalDelay > 600) diagnoses.push({ type: 'warning', icon: '⏱️', title: t('diagSlow'), message: t('diagSlowMsg').replace('%s', formatDuration(totalDelay)) });
+  else if (totalDelay < 10) diagnoses.push({ type: 'success', icon: '🚀', title: t('diagFast'), message: t('diagFastMsg').replace('%s', formatDuration(totalDelay)) });
+  else diagnoses.push({ type: 'info', icon: '✅', title: t('diagNormalSpeed'), message: t('diagNormalMsg').replace('%s', formatDuration(totalDelay)) });
+  if (slowHops.length > 0) {
+    const list = slowHops.map(h => t('slowHopsList').replace('%d', h.hopNumber).replace('%s', formatDuration(h.delay))).join(currentLang==='zh'?'、':', ');
+    diagnoses.push({ type: 'warning', icon: '🐌', title: t('diagSlowHops').replace('%d', slowHops.length), message: list });
+  }
+  if (hops.length > 8) diagnoses.push({ type: 'info', icon: '🔀', title: t('diagLongPath'), message: t('diagLongPathMsg').replace('%d', hops.length) });
+  if (auth.spf.result === 'pass' && auth.spf.aligned) diagnoses.push({ type: 'success', icon: '✅', title: t('diagSPFPass'), message: auth.spf.aligned==='strict'?t('alignStrictMsg'):t('alignRelaxedMsg') });
+  else if (['fail','softfail','hardfail'].includes(auth.spf.result)) diagnoses.push({ type: 'danger', icon: '🚨', title: t('diagSPFFail') + ' ('+auth.spf.result+')', message: t('diagSPFFailMsg') });
+  if (auth.dkim.result === 'pass' && auth.dkim.aligned) diagnoses.push({ type: 'success', icon: '✅', title: t('diagDKIMPass'), message: auth.dkim.aligned==='strict'?t('alignStrictMsg'):t('alignRelaxedMsg') });
+  else if (auth.dkim.result === 'fail') diagnoses.push({ type: 'danger', icon: '🚨', title: t('diagDKIMFail'), message: t('diagDKIMFailMsg') });
+  if (auth.dkim.weakAlgo) diagnoses.push({ type: 'warning', icon: '⚠️', title: t('diagWeakAlgo'), message: t('diagWeakAlgoMsg') });
+  if (auth.dmarc.result === 'pass') diagnoses.push({ type: 'success', icon: '✅', title: t('diagDMARCPass'), message: t('diagDMARCPassMsg') });
+  else if (auth.dmarc.result === 'fail') diagnoses.push({ type: 'danger', icon: '🚨', title: t('diagDMARCFail'), message: t('diagDMARCFailMsg') });
+  return diagnoses;
+}
+
+/* ============================================================
+   8. UI 渲染
+   ============================================================ */
+let currentData = null;
+function analyze() {
+  const input = document.getElementById('emailInput').value;
+  const errBox = document.getElementById('errorMsg');
+  errBox.innerHTML = '';
+  try {
+    const { headers, body } = parseEmail(input);
+    const hops = analyzeHops(headers);
+    const auth = parseAuth(headers);
+    currentData = { headers, body, hops, auth, analyzedAt: new Date() };
+    renderResults(currentData);
+    document.getElementById('btnReport').disabled = false;
+  } catch (err) {
+    errBox.innerHTML = `<div class="error-msg">❌ ${t('parseError')}${esc(err.message)}</div>`;
+    currentData = null;
+    document.getElementById('btnReport').disabled = true;
+  }
+}
+function renderResults(data) {
+  document.getElementById('results').style.display = 'block';
+  renderSummary(data); renderTimeline(data.hops); renderChart(data.hops);
+  renderAuthTab(data.auth, data.headers); renderHeaders(data.headers); renderDiagnosis(data);
+  showTab('summary');
+  setTimeout(() => { document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+}
+function authBadge(val) { const cls = authResultClass(val); const icon = cls==='pass'?'✅':cls==='fail'?'❌':cls==='softfail'?'⚠️':'ℹ️'; return `<span class="auth-badge ${cls}">${icon} ${esc(authResultText(val))}</span>`; }
+
+function renderSummary(data) {
+  const hops = data.hops, auth = data.auth;
+  const totalDelay = hops.length > 0 ? hops[hops.length - 1].totalTime : 0;
+  const maxDelay = hops.reduce((m, h) => Math.max(m, h.delay || 0), 0);
+  const slowHops = hops.filter(h => h.delay > 60);
+  const verySlowHops = hops.filter(h => h.delay > 300);
+  const totalClass = verySlowHops.length > 0 ? 'danger' : (slowHops.length > 0 || totalDelay > 300 ? 'warning' : (totalDelay < 30 ? 'success' : ''));
+  const maxClass = maxDelay > 120 ? 'danger' : (maxDelay > 30 ? 'warning' : 'success');
+  const fromVal = data.headers['from'] ? String(data.headers['from']).substring(0, 50) : '-';
+  const toVal = data.headers['to'] ? String(data.headers['to']).substring(0, 50) : '-';
+  const subjVal = data.headers['subject'] ? String(data.headers['subject']).substring(0, 50) : '-';
+  const html = `
+    <div class="summary-grid">
+      <div class="summary-item ${totalClass}"><div class="label">${t('sumTotalTime')}</div><div class="value">${formatDuration(totalDelay)}</div></div>
+      <div class="summary-item"><div class="label">${t('sumHops')}</div><div class="value">${hops.length}</div></div>
+      <div class="summary-item ${maxClass}"><div class="label">${t('sumMaxDelay')}</div><div class="value">${formatDuration(maxDelay)}</div></div>
+      <div class="summary-item ${slowHops.length > 0 ? 'warning' : 'success'}"><div class="label">${t('sumSlowHops')}</div><div class="value">${slowHops.length}</div></div>
+    </div>
+    <div class="section-title">${t('sumEmailInfo')}</div>
+    <div class="summary-grid">
+      <div class="summary-item"><div class="label">${t('sumFrom')}</div><div class="value" style="font-size:1em; word-break:break-all;">${esc(fromVal)}</div></div>
+      <div class="summary-item"><div class="label">${t('sumTo')}</div><div class="value" style="font-size:1em; word-break:break-all;">${esc(toVal)}</div></div>
+      <div class="summary-item"><div class="label">${t('sumSubject')}</div><div class="value" style="font-size:1em; word-break:break-all;">${esc(subjVal)}</div></div>
+    </div>
+    <div class="section-title">${t('sumAuthOverview')}</div>
+    <div class="auth-badges">${authBadge(auth.spf.result)}${authBadge(auth.dkim.result)}${authBadge(auth.dmarc.result)}</div>`;
+  document.getElementById('summaryContent').innerHTML = html;
+}
+
+function renderTimeline(hops) {
+  if (hops.length === 0) { document.getElementById('timelineContent').innerHTML = `<div class="empty-state"><div class="icon">📭</div>${t('tlEmpty')}</div>`; return; }
+  const html = '<div class="timeline">' + hops.map(hop => {
+    const cls = delayClass(hop.delay);
+    return `<div class="hop ${cls}"><div class="hop-header"><span class="hop-number">${t('tlHop').replace('%d', hop.hopNumber)} ${hop.hopNumber === 1 ? t('tlStart') : ''}</span><span class="hop-delay ${cls}">${delayText(hop.delay)}</span></div><div class="hop-detail"><div><span class="field">${t('tlTime')}</span><span class="value-text">${localTimeStr(hop.timestamp)}</span></div><div><span class="field">${t('tlFrom')}</span><span class="value-text">${esc(hop.from)}${hop.fromDetails ? ' (' + esc(hop.fromDetails) + ')' : ''}</span></div><div><span class="field">${t('tlTo')}</span><span class="value-text">${esc(hop.by)}${hop.byDetails ? ' (' + esc(hop.byDetails) + ')' : ''}</span></div>${hop.with ? `<div><span class="field">${t('tlProto')}</span><span class="value-text">${esc(hop.with)}${hop.id ? ' (ID: ' + esc(hop.id) + ')' : ''}</span></div>` : ''}${hop.for ? `<div><span class="field">${t('tlFor')}</span><span class="value-text">${esc(hop.for)}</span></div>` : ''}<div><span class="field">${t('tlTotal')}</span><span class="value-text">${formatDuration(hop.totalTime)}</span></div></div></div>`;
+  }).join('') + '</div>';
+  document.getElementById('timelineContent').innerHTML = html;
+}
+
+function renderChart(hops) {
+  if (hops.length === 0) { document.getElementById('chartContent').innerHTML = `<div class="empty-state"><div class="icon">📊</div>${t('chartEmpty')}</div>`; return; }
+  const maxDelay = Math.max(...hops.map(h => h.delay || 0), 1);
+  const html = `<div class="section-title">${t('chartTitle')}</div><div class="bar-chart">${hops.map(hop => { const width = ((hop.delay || 0) / maxDelay * 100).toFixed(1); const cls = delayClass(hop.delay); const showVal = hop.delay > 0 ? `+${formatDuration(hop.delay)}` : t('tlStart'); return `<div class="bar-row"><div class="bar-label">${t('chartHop').replace('%d', hop.hopNumber)}</div><div class="bar-container"><div class="bar ${cls}" style="width: ${width}%"><span>${showVal}</span></div></div></div>`; }).join('')}</div><div style="margin-top:20px; font-size:0.9em; color:#6b7785;"><strong>${t('chartLegend')}</strong> <span style="color:#48bb78;">${t('chartFast')}</span> &nbsp; <span style="color:#ed8936;">${t('chartNormal')}</span> &nbsp; <span style="color:#f56565;">${t('chartSlow')}</span></div>`;
+  document.getElementById('chartContent').innerHTML = html;
+}
+
+function renderAuthTab(auth, headers) {
+  const fromDomain = extractDomain(String(headers['from'] || ''));
+  const cb = (value) => { if (!value) return ''; return `<button class="copy-btn" data-value="${esc(value)}" onclick="copyValue(this)" title="${t('copy')}: ${esc(value)}">📋</button>`; };
+  const html = `
+    <div class="section-title">${t('authTitle')}</div>
+    <div class="auth-detail-card">
+      <div class="auth-detail-header"><strong>${t('authSPF')}</strong><span class="auth-badge ${authResultClass(auth.spf.result)}">${auth.spf.result ? authResultText(auth.spf.result) : t('notReported')}</span></div>
+      <div class="auth-detail-body">
+        <div><span class="label">${t('descLabel')}</span><span>${t('spfDesc')}</span></div>
+        ${auth.spf.smtpMailfrom ? `<div><span class="label">${t('spfMailFrom')}</span><code>${esc(auth.spf.smtpMailfrom)}</code>${cb(auth.spf.smtpMailfrom)}</div>` : ''}
+        ${auth.spf.smtpHelo ? `<div><span class="label">${t('spfHelo')}</span><code>${esc(auth.spf.smtpHelo)}</code>${cb(auth.spf.smtpHelo)}</div>` : ''}
+        ${auth.spf.domain ? `<div><span class="label">${t('spfDomain')}</span><code>${esc(auth.spf.domain)}</code>${cb(auth.spf.domain)}</div>` : ''}
+        ${auth.spf.clientIp ? `<div><span class="label">${t('spfClientIp')}</span><code>${esc(auth.spf.clientIp)}</code>${cb(auth.spf.clientIp)}</div>` : ''}
+        ${fromDomain ? `<div><span class="label">${t('fromDomain')}</span><code>${esc(fromDomain)}</code>${cb(fromDomain)}</div>` : ''}
+        <div><span class="label">${t('dmarcAlign')}</span><span>${alignTag(auth.spf.aligned)}</span></div>
+      </div>
+    </div>
+    <div class="auth-detail-card">
+      <div class="auth-detail-header"><strong>${t('authDKIM')}</strong><span><span class="auth-badge ${authResultClass(auth.dkim.result)}">${auth.dkim.result ? authResultText(auth.dkim.result) : (auth.dkim.signatureExists ? t('notVerified') : t('notSigned'))}</span>${auth.dkim.weakAlgo ? `<span class="tag tag-warn">${t('weakAlgo')}</span>` : ''}${auth.dkim.expired ? `<span class="tag tag-err">${t('expired')}</span>` : ''}</span></div>
+      <div class="auth-detail-body">
+        <div><span class="label">${t('descLabel')}</span><span>${t('dkimDesc')}</span></div>
+        ${auth.dkim.domain ? `<div><span class="label">${t('dkimDomain')}</span><code>${esc(auth.dkim.domain)}</code>${cb(auth.dkim.domain)}</div>` : ''}
+        ${auth.dkim.selector ? `<div><span class="label">${t('dkimSelector')}</span><code>${esc(auth.dkim.selector)}</code>${cb(auth.dkim.selector)}</div>` : ''}
+        ${auth.dkim.identity ? `<div><span class="label">${t('dkimIdentity')}</span><code>${esc(auth.dkim.identity)}</code>${cb(auth.dkim.identity)}</div>` : ''}
+        ${fromDomain ? `<div><span class="label">${t('fromDomain')}</span><code>${esc(fromDomain)}</code>${cb(fromDomain)}</div>` : ''}
+        <div><span class="label">${t('dmarcAlign')}</span><span>${alignTag(auth.dkim.aligned)}</span></div>
+        ${auth.dkim.signatureExists ? renderDKIMSigDetails(auth.dkim.signatures) : `<div style="color:#6b7785; font-size:0.9em; margin-top:6px;">${t('arcEmpty')}</div>`}
+      </div>
+    </div>
+    <div class="auth-detail-card">
+      <div class="auth-detail-header"><strong>${t('authDMARC')}</strong><span class="auth-badge ${authResultClass(auth.dmarc.result)}">${auth.dmarc.result ? authResultText(auth.dmarc.result) : t('notReported')}</span></div>
+      <div class="auth-detail-body">
+        <div><span class="label">${t('descLabel')}</span><span>${t('dmarcDesc')}</span></div>
+        ${auth.dmarc.headerFrom ? `<div><span class="label">${t('fromDomain')}</span><code>${esc(auth.dmarc.headerFrom)}</code>${cb(auth.dmarc.headerFrom)}</div>` : ''}
+        ${auth.dmarc.action ? `<div><span class="label">${t('dmarcAction')}</span><code>${esc(auth.dmarc.action)}</code>${cb(auth.dmarc.action)}</div>` : ''}
+        <div><span class="label">${t('dmarcCombined')}</span><span>${alignTag(auth.dmarc.aligned)}</span></div>
+        <div class="dmarc-explain"><em>${t('dmarcExplain')}</em></div>
+      </div>
+    </div>
+    <div class="auth-detail-card">
+      <div class="auth-detail-header"><strong>${t('authARC')}</strong><span class="auth-badge ${authResultClass(auth.arc.result)}">${auth.arc.result ? authResultText(auth.arc.result) : t('notUsed')}</span></div>
+      <div class="auth-detail-body">
+        <div><span class="label">${t('descLabel')}</span><span>${t('arcDesc')}</span></div>
+        <div><span class="label">${t('arcSealCount')}</span><span>${auth.arc.seals.filter(s => s && s.seal).length}</span></div>
+        <div><span class="label">${t('arcMsgSigCount')}</span><span>${auth.arc.messageSignatures}</span></div>
+        ${auth.arc.authIdentity ? `<div><span class="label">${t('arcInstance')}</span><code>${esc(auth.arc.authIdentity)}</code>${cb(auth.arc.authIdentity)}</div>` : ''}
+        ${renderARCSeals(auth.arc.seals)}
+      </div>
+    </div>
+    ${auth.raw ? `<div class="section-title">${t('rawAR')}</div><div class="auth-detail-card"><div class="auth-detail-body"><pre style="white-space:pre-wrap; word-break:break-all; font-family:'SF Mono',Consolas,monospace; font-size:0.82em; color:#2c3e50; margin:0;">${esc(auth.raw)}</pre></div></div>` : ''}`;
+  document.getElementById('authContent').innerHTML = html;
+}
+function renderDKIMSigDetails(sigs) {
+  if (!sigs || sigs.length === 0) return '';
+  return sigs.map((sig, i) => {
+    if (!sig || Object.keys(sig).length === 0) return '';
+    const weak = isWeakAlgorithm(sig.a), expired = isDKIMExpired(sig.x);
+    const sigTime = sig.t ? new Date(parseInt(sig.t) * 1000) : null;
+    const sigExp = sig.x ? new Date(parseInt(sig.x) * 1000) : null;
+    return `<div class="dkim-sig-detail"><div class="sig-title">${t('sigTitle')}${i+1}${weak ? ` <span class="tag tag-warn">${t('weakAlgo')}</span>` : ''}${expired ? ` <span class="tag tag-err">${t('expired')}</span>` : ''}</div>${sig.v ? `<div><span class="label">${t('sigVersion')}</span>${esc(sig.v)}</div>` : ''}${sig.a ? `<div><span class="label">${t('sigAlgo')}</span><code>${esc(sig.a)}</code></div>` : ''}${sig.c ? `<div><span class="label">${t('sigCanon')}</span><code>${esc(sig.c)}</code></div>` : ''}${sig.q ? `<div><span class="label">${t('sigQuery')}</span><code>${esc(sig.q)}</code></div>` : ''}${sigTime && !isNaN(sigTime) ? `<div><span class="label">${t('sigTime')}</span>${localTimeStr(sigTime)}</div>` : ''}${sigExp && !isNaN(sigExp) ? `<div><span class="label">${t('sigExp')}</span>${localTimeStr(sigExp)}</div>` : ''}${sig.bh ? `<div><span class="label">${t('sigBh')}</span><code>${esc(sig.bh.substring(0, 40))}${sig.bh.length > 40 ? '...' : ''}</code></div>` : ''}</div>`;
+  }).join('');
+}
+function renderARCSeals(seals) {
+  if (!seals || seals.length === 0) return '';
+  return seals.map((seal, i) => {
+    if (!seal || !seal.seal) return '';
+    const s = seal.seal;
+    const cv = s.cv ? `<span class="tag ${s.cv === 'pass' ? 'tag-ok' : 'tag-warn'}">cv=${esc(s.cv)}</span>` : '';
+    return `<div class="arc-seal-row"><strong>${t('sealInstance')}${i+1}</strong> ${cv}${s.i ? `<div><span class="label">${t('sealInstanceI')}</span><code>${esc(s.i)}</code></div>` : ''}${s.d ? `<div><span class="label">${t('sealDomain')}</span><code>${esc(s.d)}</code></div>` : ''}${s.s ? `<div><span class="label">${t('sealSelector')}</span><code>${esc(s.s)}</code></div>` : ''}${s.t ? `<div><span class="label">${t('sealTime')}</span>${localTimeStr(new Date(parseInt(s.t)*1000))}</div>` : ''}</div>`;
+  }).join('');
+}
+function renderHeaders(headers) {
+  const important = ['from','to','cc','bcc','subject','date','message-id','return-path','reply-to','sender','in-reply-to','references','mime-version','content-type','content-transfer-encoding','authentication-results','received-spf','dkim-signature','arc-seal','arc-message-signature','arc-authentication-results','x-mailer','x-originating-ip','list-id','list-unsubscribe','spam-status'];
+  let html = '<table class="headers-table"><tbody>';
+  let hasImportant = false;
+  for (const key of important) { if (headers[key]) { hasImportant = true; const value = Array.isArray(headers[key]) ? headers[key].join('\n') : headers[key]; html += `<tr><td>${esc(key)}</td><td>${esc(value).replace(/\n/g, '<br>')}</td></tr>`; } }
+  if (headers['received']) { const list = Array.isArray(headers['received']) ? headers['received'] : [headers['received']]; list.forEach((v, i) => { html += `<tr><td>received[${i}]</td><td>${esc(v).replace(/\n/g, '<br>')}</td></tr>`; }); }
+  const otherKeys = Object.keys(headers).filter(k => !important.includes(k) && k !== 'received');
+  if (otherKeys.length > 0) { html += `<tr><td colspan="2" class="headers-section-title">${t('otherHeaders')} (${otherKeys.length})</td></tr>`; for (const key of otherKeys) { const value = Array.isArray(headers[key]) ? headers[key].join(', ') : headers[key]; html += `<tr><td>${esc(key)}</td><td>${esc(value)}</td></tr>`; } }
+  if (!hasImportant && otherKeys.length === 0) html += `<tr><td colspan="2" style="text-align:center; padding:30px; color:#6b7785;">${t('headersEmpty')}</td></tr>`;
+  html += '</tbody></table>';
+  document.getElementById('headersContent').innerHTML = html;
+}
+function renderDiagnosis(data) {
+  const diagnoses = generateDiagnoses(data);
+  const html = diagnoses.map(d => `<div class="diagnosis ${d.type}"><div class="diagnosis-icon">${d.icon}</div><div class="diagnosis-body"><div class="diagnosis-title">${esc(d.title)}</div><div class="diagnosis-msg">${esc(d.message)}</div></div></div>`).join('');
+  document.getElementById('diagnosisContent').innerHTML = html || `<div class="empty-state">${t('diagEmpty')}</div>`;
+}
+
+/* ============================================================
+   ★ 9. 报告生成（支持 i18n，提示已修正）
+   ============================================================ */
+function buildReportHTML(data) {
+  const hops = data.hops, auth = data.auth, headers = data.headers;
+  const totalDelay = hops.length > 0 ? hops[hops.length - 1].totalTime : 0;
+  const maxDelay = hops.reduce((m, h) => Math.max(m, h.delay || 0), 0);
+  const slowHops = hops.filter(h => h.delay > 60);
+  const verySlowHops = hops.filter(h => h.delay > 300);
+  const fromDomain = extractDomain(String(headers['from'] || ''));
+  const fromVal = headers['from'] || '-', toVal = headers['to'] || '-';
+  const subjVal = headers['subject'] || '-', dateVal = headers['date'] || '-', msgId = headers['message-id'] || '-';
+  const analyzedAt = data.analyzedAt || new Date();
+  const totalClass = verySlowHops.length > 0 ? 'danger' : (slowHops.length > 0 || totalDelay > 300 ? 'warning' : (totalDelay < 30 ? 'success' : ''));
+  const maxClass = maxDelay > 120 ? 'danger' : (maxDelay > 30 ? 'warning' : 'success');
+  const locStr = localTimeStr(analyzedAt);
+
+  const rBadge = (val) => { const cls = authResultClass(val); const icon = cls==='pass'?'✅':cls==='fail'?'❌':cls==='softfail'?'⚠️':'ℹ️'; return `<span class="r-badge ${cls}">${icon} ${esc(authResultText(val))}</span>`; };
+  const diagnoses = generateDiagnoses(data);
+  const splitNum = (s) => { const m = s.match(/^([\d一二三四五六七八九十]+)[、.\s]\s*(.*)$/); return m ? [m[1], m[2]] : [null, s]; };
+  const [tlNum, tlName] = splitNum(t('reportTimeline'));
+  const [auNum, auName] = splitNum(t('reportAuth'));
+  const [dgNum, dgName] = splitNum(t('reportDiagnosis'));
+
+  const hopsHTML = hops.map(hop => {
+    const cls = delayClass(hop.delay);
+    return `<div class="r-hop ${cls}"><div class="r-hop-header"><span class="r-hop-num">${t('tlHop').replace('%d', hop.hopNumber)} ${hop.hopNumber === 1 ? t('reportHopStart') : ''}</span><span class="r-hop-delay ${cls}">${delayText(hop.delay)}</span></div><div class="r-hop-body"><div><span class="r-label">${t('tlTime')}</span>${localTimeStr(hop.timestamp)}</div><div><span class="r-label">${t('tlFrom')}</span><code>${esc(hop.from)}</code>${hop.fromDetails ? ` <code>(${esc(hop.fromDetails)})</code>` : ''}</div><div><span class="r-label">${t('tlTo')}</span><code>${esc(hop.by)}</code>${hop.byDetails ? ` <code>(${esc(hop.byDetails)})</code>` : ''}</div>${hop.with ? `<div><span class="r-label">${t('tlProto')}</span><code>${esc(hop.with)}</code>${hop.id ? ` (ID: ${esc(hop.id)})` : ''}</div>` : ''}${hop.for ? `<div><span class="r-label">${t('tlFor')}</span><code>${esc(hop.for)}</code></div>` : ''}<div><span class="r-label">${t('tlTotal')}</span>${formatDuration(hop.totalTime)}</div></div></div>`;
+  }).join('');
+  const diagHTML = diagnoses.map(d => `<div class="r-diag ${d.type}"><div class="r-diag-icon">${d.icon}</div><div><div class="r-diag-title">${esc(d.title)}</div><div class="r-diag-msg">${esc(d.message)}</div></div></div>`).join('');
+  const timelineSummary = `<div class="r-summary-stats"><div class="r-mini-stat ${totalClass}"><div class="r-mini-label">${t('miniTotal')}</div><div class="r-mini-value">${formatDuration(totalDelay)}</div></div><div class="r-mini-stat"><div class="r-mini-label">${t('miniHops')}</div><div class="r-mini-value">${hops.length}</div></div><div class="r-mini-stat ${maxClass}"><div class="r-mini-label">${t('miniMaxDelay')}</div><div class="r-mini-value">${formatDuration(maxDelay)}</div></div><div class="r-mini-stat ${slowHops.length > 0 ? 'warning' : 'success'}"><div class="r-mini-label">${t('miniSlow')}</div><div class="r-mini-value">${slowHops.length}</div></div></div>`;
+  const spfShort = t('authSPF').split(' ')[0], dkimShort = t('authDKIM').split(' ')[0], arcShort = t('authARC').split(' ')[0];
+  const authSummary = `<div class="r-summary-text"><div class="r-auth-summary-row"><span class="r-asr-label">${spfShort}</span>${rBadge(auth.spf.result)}</div><div class="r-auth-summary-row"><span class="r-asr-label">${dkimShort}</span>${rBadge(auth.dkim.result)}${auth.dkim.weakAlgo ? ` <span class="r-tag r-tag-warn">${t('weakAlgo')}</span>` : ''}${auth.dkim.expired ? ` <span class="r-tag r-tag-err">${t('expired')}</span>` : ''}</div><div class="r-auth-summary-row"><span class="r-asr-label">${t('authDMARC')}</span>${rBadge(auth.dmarc.result)}</div><div class="r-auth-summary-row"><span class="r-asr-label">${arcShort}</span>${rBadge(auth.arc.result)}</div></div>`;
+  const diagCount = { success: 0, info: 0, warning: 0, danger: 0 }; diagnoses.forEach(d => diagCount[d.type]++);
+  const diagSummary = `<div class="r-summary-text"><div class="r-diag-count"><div class="r-count-item success"><div class="r-count-num">${diagCount.success}</div><div class="r-count-lbl">${t('countSuccess')}</div></div><div class="r-count-item info"><div class="r-count-num">${diagCount.info}</div><div class="r-count-lbl">${t('countInfo')}</div></div><div class="r-count-item warning"><div class="r-count-num">${diagCount.warning}</div><div class="r-count-lbl">${t('countWarn')}</div></div><div class="r-count-item danger"><div class="r-count-num">${diagCount.danger}</div><div class="r-count-lbl">${t('countErr')}</div></div></div>${diagnoses.length > 0 ? `<div class="r-diag-top"><strong>${t('reportMainPrompt')}</strong>${esc(diagnoses[0].icon)} ${esc(diagnoses[0].title)}</div>` : `<div class="r-diag-top" style="color:#6b7785;">${t('reportNoDiag')}</div>`}</div>`;
+  const expandWord = t('reportExpand'), collapseWord = t('reportCollapse');
+
+  return `<!DOCTYPE html>
+<html lang="${currentLang === 'zh' ? 'zh-CN' : 'en'}">
+<head>
+<meta charset="UTF-8">
+<title>${t('reportTitle')} - ${esc(subjVal).substring(0, 50)}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; background: #f5f7fa; color: #2c3e50; line-height: 1.6; padding: 20px; }
+.r-container { max-width: 1100px; margin: 0 auto; }
+.r-report { background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-radius: 8px; overflow: hidden; }
+.r-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; }
+.r-header h1 { font-size: 28px; margin-bottom: 12px; }
+.r-header .r-meta { opacity: 0.95; font-size: 14px; }
+.r-header .r-meta div { margin: 4px 0; }
+.r-header .r-meta strong { display: inline-block; min-width: 90px; }
+.r-header .r-dev { margin-top: 14px; font-size: 13px; opacity: 0.9; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2); }
+.r-header .r-dev a { color: white; text-decoration: none; border-bottom: 1px dashed rgba(255,255,255,0.6); }
+.r-body { padding: 30px 40px; }
+.r-toolbar { display: flex; gap: 10px; margin-bottom: 20px; padding: 12px 16px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; flex-wrap: wrap; align-items: center; }
+.r-toolbar-info { font-size: 13px; color: #6b7785; margin-left: auto; }
+.r-tool-btn { padding: 6px 14px; background: white; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 13px; cursor: pointer; color: #4a5568; transition: all 0.2s; }
+.r-tool-btn:hover { background: #edf2f7; border-color: #a0aec0; }
+.r-section { margin-bottom: 28px; page-break-inside: avoid; }
+.r-section-overview h2 { font-size: 20px; color: #2c3e50; border-bottom: 2px solid #667eea; padding-bottom: 8px; margin-bottom: 20px; }
+.r-section-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; padding: 8px 0; border-bottom: 2px solid #667eea; margin-bottom: 16px; transition: opacity 0.2s; }
+.r-section-header:hover { opacity: 0.85; }
+.r-section-title-group { display: flex; align-items: center; gap: 8px; font-size: 20px; color: #2c3e50; }
+.r-section-num { font-weight: 700; color: #667eea; }
+.r-toggle-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: #f0f2f5; border: 1px solid #cbd5e0; border-radius: 6px; cursor: pointer; font-size: 13px; color: #4a5568; font-weight: 500; transition: all 0.2s; }
+.r-toggle-btn:hover { background: #e2e8f0; border-color: #a0aec0; }
+.r-toggle-icon { display: inline-block; transition: transform 0.3s; font-size: 11px; }
+.r-collapsible.collapsed .r-toggle-icon { transform: rotate(-90deg); }
+.r-detail { animation: fadeIn 0.3s ease; }
+.r-summary { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+.r-summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; }
+.r-mini-stat { padding: 14px; border-radius: 6px; background: white; border-left: 4px solid #667eea; }
+.r-mini-stat.warning { border-left-color: #ed8936; background: #fffaf0; }
+.r-mini-stat.danger { border-left-color: #f56565; background: #fff5f5; }
+.r-mini-stat.success { border-left-color: #48bb78; background: #f0fff4; }
+.r-mini-label { font-size: 11px; color: #6b7785; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600; }
+.r-mini-value { font-size: 20px; font-weight: 700; }
+.r-summary-text { padding: 16px 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; }
+.r-auth-summary-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed #e9ecef; flex-wrap: wrap; }
+.r-auth-summary-row:last-child { border-bottom: none; }
+.r-asr-label { min-width: 100px; font-weight: 600; color: #4a5568; font-size: 14px; }
+.r-diag-count { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+.r-count-item { padding: 14px; border-radius: 6px; text-align: center; background: white; border: 1px solid #e9ecef; }
+.r-count-item.success { background: #f0fff4; border-color: #c6f6d5; }
+.r-count-item.info { background: #ebf8ff; border-color: #bee3f8; }
+.r-count-item.warning { background: #fffaf0; border-color: #feebc8; }
+.r-count-item.danger { background: #fff5f5; border-color: #fed7d7; }
+.r-count-num { font-size: 24px; font-weight: 700; }
+.r-count-item.success .r-count-num { color: #22543d; }
+.r-count-item.info .r-count-num { color: #2a4365; }
+.r-count-item.warning .r-count-num { color: #7c2d12; }
+.r-count-item.danger .r-count-num { color: #742a2a; }
+.r-count-lbl { font-size: 12px; color: #6b7785; margin-top: 2px; }
+.r-diag-top { padding: 10px 14px; background: white; border-radius: 6px; font-size: 14px; color: #4a5568; border-left: 3px solid #667eea; }
+.r-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+.r-stat { padding: 18px; border-radius: 8px; background: #f8f9fa; border-left: 4px solid #667eea; }
+.r-stat.warning { border-left-color: #ed8936; background: #fffaf0; }
+.r-stat.danger { border-left-color: #f56565; background: #fff5f5; }
+.r-stat.success { border-left-color: #48bb78; background: #f0fff4; }
+.r-stat .r-stat-label { font-size: 12px; color: #6b7785; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600; }
+.r-stat .r-stat-value { font-size: 24px; font-weight: 700; }
+.r-info-table { width: 100%; border-collapse: collapse; }
+.r-info-table td { padding: 10px 12px; border-bottom: 1px solid #e9ecef; font-size: 14px; }
+.r-info-table td:first-child { font-weight: 600; color: #4a5568; width: 140px; background: #f8f9fa; }
+.r-timeline { position: relative; padding-left: 30px; }
+.r-timeline::before { content: ''; position: absolute; left: 10px; top: 5px; bottom: 5px; width: 2px; background: #cbd5e0; }
+.r-hop { position: relative; padding: 14px 18px; margin-bottom: 12px; background: #f8f9fa; border-radius: 8px; margin-left: 25px; border: 1px solid #e9ecef; }
+.r-hop::before { content: ''; position: absolute; left: -30px; top: 18px; width: 14px; height: 14px; background: #48bb78; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 0 2px #48bb78; }
+.r-hop.slow::before { background: #f56565; box-shadow: 0 0 0 2px #f56565; }
+.r-hop.normal::before { background: #ed8936; box-shadow: 0 0 0 2px #ed8936; }
+.r-hop-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+.r-hop-num { font-weight: 700; color: #2c3e50; }
+.r-hop-delay { padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: 600; color: white; background: #48bb78; }
+.r-hop-delay.slow { background: #f56565; }
+.r-hop-delay.normal { background: #ed8936; }
+.r-hop-body { font-size: 14px; color: #4a5568; }
+.r-hop-body > div { padding: 3px 0; }
+.r-label { display: inline-block; min-width: 60px; color: #6b7785; font-weight: 600; }
+.r-hop-body code, .r-auth-grid code { font-family: 'SF Mono', 'Consolas', monospace; font-size: 0.92em; background: #e2e8f0; padding: 1px 5px; border-radius: 3px; word-break: break-all; }
+.r-badges { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.r-badge { display: inline-block; padding: 6px 12px; border-radius: 12px; font-size: 14px; font-weight: 600; }
+.r-badge.pass { background: #c6f6d5; color: #22543d; }
+.r-badge.fail { background: #fed7d7; color: #742a2a; }
+.r-badge.softfail { background: #feebc8; color: #7c2d12; }
+.r-badge.none { background: #e2e8f0; color: #2d3748; }
+.r-auth-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 16px 20px; margin-bottom: 14px; }
+.r-auth-card h3 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 12px; font-size: 16px; }
+.r-auth-grid { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 14px; }
+.r-auth-grid .r-label { color: #6b7785; }
+.r-tag { font-size: 12px; padding: 2px 7px; border-radius: 4px; font-weight: 500; margin-left: 4px; display: inline-block; }
+.r-tag-ok { background: #c6f6d5; color: #22543d; }
+.r-tag-warn { background: #feebc8; color: #7c2d12; }
+.r-tag-err { background: #fed7d7; color: #742a2a; }
+.r-tag-info { background: #bee3f8; color: #2a4365; }
+.r-diag { padding: 12px 16px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #3182ce; background: #ebf8ff; display: flex; gap: 12px; }
+.r-diag.warning { border-left-color: #ed8936; background: #fffaf0; }
+.r-diag.danger { border-left-color: #f56565; background: #fff5f5; }
+.r-diag.success { border-left-color: #48bb78; background: #f0fff4; }
+.r-diag-icon { font-size: 1.3em; flex-shrink: 0; }
+.r-diag-title { font-weight: 600; margin-bottom: 4px; font-size: 15px; }
+.r-diag-msg { font-size: 14px; opacity: 0.95; }
+.r-footer { padding: 24px 40px; text-align: center; color: #6b7785; font-size: 13px; border-top: 1px solid #e9ecef; background: #f8f9fa; }
+.r-footer a { color: #667eea; text-decoration: none; border-bottom: 1px dashed #667eea; }
+.r-footer a:hover { border-bottom-style: solid; }
+.r-print-bar { background: #fef5e7; border: 1px solid #f6ad55; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; color: #7c2d12; font-size: 14px; }
+@media print {
+  body { background: white; padding: 0; }
+  .r-report { box-shadow: none; }
+  .r-print-bar, .r-toolbar { display: none; }
+  .r-section { page-break-inside: avoid; }
+  .r-section-header { page-break-after: avoid; }
+  .r-collapsible .r-detail { display: block !important; }
+  .r-collapsible .r-summary { display: none !important; }
+}
+@media (max-width: 768px) {
+  .r-stats, .r-summary-stats, .r-diag-count { grid-template-columns: repeat(2, 1fr); }
+  .r-body { padding: 20px; }
+  .r-header { padding: 25px; }
+  .r-auth-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="r-container">
+<div class="r-print-bar">${t('reportTip')}</div>
+<div class="r-report">
+  <div class="r-header">
+    <h1>${t('reportTitle')}</h1>
+    <div class="r-meta">
+      <div><strong>${t('reportSubject')}</strong>${esc(subjVal)}</div>
+      <div><strong>${t('reportFrom')}</strong>${esc(fromVal)}</div>
+      <div><strong>${t('reportTo')}</strong>${esc(toVal)}</div>
+      <div><strong>${t('reportGenerated')}</strong>${locStr}</div>
+    </div>
+    <div class="r-dev">${t('devBy')} <strong>Renjun</strong> ${t('devDeveloped')} · <a href="mailto:renjun.yang@qq.com">renjun.yang@qq.com</a></div>
+  </div>
+  <div class="r-body">
+    <div class="r-toolbar">
+      <button class="r-tool-btn" onclick="expandAll()">${t('reportExpandAll')}</button>
+      <button class="r-tool-btn" onclick="collapseAll()">${t('reportCollapseAll')}</button>
+      <span class="r-toolbar-info">${t('reportTipInline')}</span>
+    </div>
+    <div class="r-section r-section-overview">
+      <h2>${t('reportOverview')}</h2>
+      <div class="r-stats">
+        <div class="r-stat ${totalClass}"><div class="r-stat-label">${t('sumTotalTime')}</div><div class="r-stat-value">${formatDuration(totalDelay)}</div></div>
+        <div class="r-stat"><div class="r-stat-label">${t('sumHops')}</div><div class="r-stat-value">${hops.length}</div></div>
+        <div class="r-stat ${maxClass}"><div class="r-stat-label">${t('sumMaxDelay')}</div><div class="r-stat-value">${formatDuration(maxDelay)}</div></div>
+        <div class="r-stat ${slowHops.length > 0 ? 'warning' : 'success'}"><div class="r-stat-label">${t('sumSlowHops')}</div><div class="r-stat-value">${slowHops.length}</div></div>
+      </div>
+      <h3 style="font-size:16px; color:#4a5568; margin: 18px 0 10px;">${t('reportEmailInfo')}</h3>
+      <table class="r-info-table">
+        <tr><td>${t('sumFrom')}</td><td>${esc(fromVal)}</td></tr>
+        <tr><td>${t('sumTo')}</td><td>${esc(toVal)}</td></tr>
+        <tr><td>${t('sumSubject')}</td><td>${esc(subjVal)}</td></tr>
+        <tr><td>${t('reportDateLabel')}</td><td>${esc(dateVal)}</td></tr>
+        <tr><td>${t('reportMsgIdLabel')}</td><td><code>${esc(msgId)}</code></td></tr>
+      </table>
+      <h3 style="font-size:16px; color:#4a5568; margin: 18px 0 10px;">${t('reportAuthOverview')}</h3>
+      <div class="r-badges">${rBadge(auth.spf.result)}${rBadge(auth.dkim.result)}${rBadge(auth.dmarc.result)}</div>
+    </div>
+    <div class="r-section r-collapsible collapsed" data-section="timeline">
+      <div class="r-section-header" onclick="toggleSection(this)">
+        <div class="r-section-title-group"><span class="r-section-num">${tlNum||''}</span><span>${esc(tlName)}</span></div>
+        <button class="r-toggle-btn"><span class="r-toggle-icon">▼</span><span class="r-toggle-text">${expandWord}</span></button>
+      </div>
+      <div class="r-summary">${timelineSummary}</div>
+      <div class="r-detail" style="display:none;"><div class="r-timeline">${hopsHTML || `<p style="color:#6b7785; text-align:center; padding:30px;">${t('reportNoReceived')}</p>`}</div></div>
+    </div>
+    <div class="r-section r-collapsible collapsed" data-section="auth">
+      <div class="r-section-header" onclick="toggleSection(this)">
+        <div class="r-section-title-group"><span class="r-section-num">${auNum||''}</span><span>${esc(auName)}</span></div>
+        <button class="r-toggle-btn"><span class="r-toggle-icon">▼</span><span class="r-toggle-text">${expandWord}</span></button>
+      </div>
+      <div class="r-summary">${authSummary}</div>
+      <div class="r-detail" style="display:none;">
+        <div class="r-auth-card"><h3><span>${spfShort}</span>${rBadge(auth.spf.result)}</h3><div class="r-auth-grid"><div class="r-label">${t('spfMailFrom').replace(/[:：]\s*$/, '')}</div><div>${auth.spf.smtpMailfrom ? `<code>${esc(auth.spf.smtpMailfrom)}</code>` : '-'}</div><div class="r-label">${t('spfHelo').replace(/[:：]\s*$/, '')}</div><div>${auth.spf.smtpHelo ? `<code>${esc(auth.spf.smtpHelo)}</code>` : '-'}</div><div class="r-label">${t('spfDomain').replace(/[:：]\s*$/, '')}</div><div>${auth.spf.domain ? `<code>${esc(auth.spf.domain)}</code>` : '-'}</div><div class="r-label">${t('spfClientIp').replace(/[:：]\s*$/, '')}</div><div>${auth.spf.clientIp ? `<code>${esc(auth.spf.clientIp)}</code>` : '-'}</div><div class="r-label">${t('fromDomain').replace(/[:：]\s*$/, '')}</div><div>${fromDomain ? `<code>${esc(fromDomain)}</code>` : '-'}</div><div class="r-label">${t('dmarcAlign').replace(/[:：]\s*$/, '')}</div><div>${alignTag(auth.spf.aligned)}</div></div></div>
+        <div class="r-auth-card"><h3><span>${dkimShort}</span><span>${rBadge(auth.dkim.result)}${auth.dkim.weakAlgo ? `<span class="r-tag r-tag-warn">${t('weakAlgo')}</span>` : ''}${auth.dkim.expired ? `<span class="r-tag r-tag-err">${t('expired')}</span>` : ''}</span></h3><div class="r-auth-grid"><div class="r-label">${t('dkimDomain').replace(/[:：]\s*$/, '')}</div><div>${auth.dkim.domain ? `<code>${esc(auth.dkim.domain)}</code>` : '-'}</div><div class="r-label">${t('dkimSelector').replace(/[:：]\s*$/, '')}</div><div>${auth.dkim.selector ? `<code>${esc(auth.dkim.selector)}</code>` : '-'}</div><div class="r-label">${t('dkimIdentity').replace(/[:：]\s*$/, '')}</div><div>${auth.dkim.identity ? `<code>${esc(auth.dkim.identity)}</code>` : '-'}</div><div class="r-label">${t('fromDomain').replace(/[:：]\s*$/, '')}</div><div>${fromDomain ? `<code>${esc(fromDomain)}</code>` : '-'}</div><div class="r-label">${t('dmarcAlign').replace(/[:：]\s*$/, '')}</div><div>${alignTag(auth.dkim.aligned)}</div></div></div>
+        <div class="r-auth-card"><h3><span>${t('authDMARC')}</span>${rBadge(auth.dmarc.result)}</h3><div class="r-auth-grid"><div class="r-label">${t('fromDomain').replace(/[:：]\s*$/, '')}</div><div>${auth.dmarc.headerFrom ? `<code>${esc(auth.dmarc.headerFrom)}</code>` : '-'}</div><div class="r-label">${t('dmarcAction').replace(/[:：]\s*$/, '')}</div><div>${auth.dmarc.action ? `<code>${esc(auth.dmarc.action)}</code>` : '-'}</div><div class="r-label">${t('dmarcCombined').replace(/[:：]\s*$/, '')}</div><div>${alignTag(auth.dmarc.aligned)}</div></div><p style="margin-top:10px; font-size:13px; color:#6b7785;"><em>${t('dmarcExplain')}</em></p></div>
+        <div class="r-auth-card"><h3><span>${arcShort}</span>${rBadge(auth.arc.result)}</h3><div class="r-auth-grid"><div class="r-label">${t('arcSealCount').replace(/[:：]\s*$/, '')}</div><div>${auth.arc.seals.filter(s => s && s.seal).length}</div><div class="r-label">${t('arcMsgSigCount').replace(/[:：]\s*$/, '')}</div><div>${auth.arc.messageSignatures}</div></div></div>
+      </div>
+    </div>
+    <div class="r-section r-collapsible collapsed" data-section="diagnosis">
+      <div class="r-section-header" onclick="toggleSection(this)">
+        <div class="r-section-title-group"><span class="r-section-num">${dgNum||''}</span><span>${esc(dgName)}</span></div>
+        <button class="r-toggle-btn"><span class="r-toggle-icon">▼</span><span class="r-toggle-text">${expandWord}</span></button>
+      </div>
+      <div class="r-summary">${diagSummary}</div>
+      <div class="r-detail" style="display:none;">${diagHTML || `<p style="color:#6b7785; text-align:center; padding:30px;">${t('reportNoDiag')}</p>`}</div>
+    </div>
+  </div>
+  <div class="r-footer">
+    <p>${t('reportFooter')} ${locStr}</p>
+    <p style="margin-top:8px;">${t('devBy')} <strong>Renjun</strong> ${t('devDeveloped')} · <a href="mailto:renjun.yang@qq.com">renjun.yang@qq.com</a></p>
+    <p style="margin-top:4px; font-size:12px; opacity:0.7;">${t('footerInfo')}</p>
+  </div>
+</div>
+</div>
+<script>
+function toggleSection(header) {
+  const section = header.closest('.r-collapsible');
+  if (!section) return;
+  const isCollapsed = section.classList.contains('collapsed');
+  if (isCollapsed) {
+    section.classList.remove('collapsed');
+    section.querySelector('.r-detail').style.display = 'block';
+    section.querySelector('.r-summary').style.display = 'none';
+    section.querySelector('.r-toggle-text').textContent = '${collapseWord}';
+  } else {
+    section.classList.add('collapsed');
+    section.querySelector('.r-detail').style.display = 'none';
+    section.querySelector('.r-summary').style.display = 'block';
+    section.querySelector('.r-toggle-text').textContent = '${expandWord}';
+  }
+}
+function expandAll() { document.querySelectorAll('.r-collapsible.collapsed').forEach(sec => toggleSection(sec.querySelector('.r-section-header'))); }
+function collapseAll() { document.querySelectorAll('.r-collapsible:not(.collapsed)').forEach(sec => toggleSection(sec.querySelector('.r-section-header'))); }
+<\/script>
+</body>
+</html>`;
+}
+
+function generateReport() {
+  if (!currentData) { alert(t('noEmail')); return; }
+  try {
+    const reportHTML = buildReportHTML(currentData);
+    const blob = new Blob([reportHTML], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+    a.href = url; a.download = `email-report-${ts}.html`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) { alert(t('reportError') + err.message); }
+}
+
+/* ============================================================
+   10. UI 控制
+   ============================================================ */
+function showTab(name) {
+  document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  const btn = document.querySelector(`[data-tab="${name}"]`);
+  const content = document.getElementById(name + 'Content');
+  if (btn) btn.classList.add('active');
+  if (content) content.classList.add('active');
+}
+function toggleHelp() { const box = document.getElementById('helpBox'); box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
+function clearAll() {
+  document.getElementById('emailInput').value = '';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('errorMsg').innerHTML = '';
+  currentData = null;
+  document.getElementById('btnReport').disabled = true;
+}
+function loadSample() {
+  const sample = `Delivered-To: recipient@example.com
+Received: from mx.receiver.example.com (mx.receiver.example.com [203.0.113.10])
+	by mail.example.com (Postfix) with ESMTPS id A1B2C3D4E5
+	for <recipient@example.com>; Mon, 15 Jan 2024 14:32:45 +0000 (UTC)
+Received: from mail.sender.com (mail.sender.com [198.51.100.5])
+	by mx.receiver.example.com (Postfix) with ESMTPS id F6G7H8I9J0
+	for <recipient@example.com>; Mon, 15 Jan 2024 14:30:12 +0000 (UTC)
+Received: from smtp.gmail.com (smtp.gmail.com [74.125.133.108])
+	by mail.sender.com (Postfix) with ESMTPSA id K1L2M3N4O5
+	for <recipient@example.com>; Mon, 15 Jan 2024 14:25:30 +0000 (UTC)
+Received: by smtp.gmail.com with SMTP id z12sm12345678ybp.45
+	for <recipient@example.com>; Mon, 15 Jan 2024 06:25:25 -0800 (PST)
+From: =?UTF-8?B?5rWL6K+V5Li76aKY?= <john.smith@gmail.com>
+To: =?UTF-8?B?QWxpY2UgV29uZw==?= <recipient@example.com>
+Subject: =?UTF-8?B?VGVzdCBFbWFpbCDlj4LogIMnOiDjgILmnKzjga8=?=
+Date: Mon, 15 Jan 2024 14:25:20 +0800
+Message-ID: <CAH8y=8uK3mN4pQ5r@mail.gmail.com>
+Return-Path: <john.smith@gmail.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: base64
+Authentication-Results: mx.receiver.example.com;
+	spf=pass smtp.mailfrom=gmail.com;
+	dkim=pass header.d=gmail.com header.s=20230601 header.b=qR8sT9uV;
+	dmarc=pass action=none header.from=gmail.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmail.com;
+	s=20230601; t=1705322725; x=1707914725;
+	h=from:to:subject:date:message-id:mime-version;
+	bh=abc123def456ghi789jkl012mno345pqr678stu901vwx234yz567=
+	b=SignatureValueBase64Encoded==
+Received-SPF: pass (mx.receiver.example.com: domain of gmail.com designates 74.125.133.108 as permitted sender) client-ip=74.125.133.108; envelope-from=john.smith@gmail.com;
+X-Originating-IP: [192.0.2.42]
+
+VGhpcyBpcyB0aGUgYm9keSBvZiB0aGUgZW1haWwuCk15IG5hbWUgaXMgSm9obi4=
+`;
+  document.getElementById('emailInput').value = sample;
+  document.getElementById('errorMsg').innerHTML = '';
+}
+
+/* 初始化语言 */
+applyStaticI18n();
+</script>
+</body>
+</html>
